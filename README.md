@@ -1,6 +1,7 @@
 # Getting Started
 Clone the repository or download as a ZIP.<br/>
-
+Download the [TF7xxx sample images](https://download.beckhoff.com/download//software/GitHub/TF7xxx/TF7xxx_Sample_Images.zip) as ZIP from our website.<br/>
+First unzip the repository if not cloned, then extract the sample images into the images folder.
 
 # About this repository
 This repository contains official sample code for the following products offered by [Beckhoff Automation](https://www.beckhoff.com).<br/>
