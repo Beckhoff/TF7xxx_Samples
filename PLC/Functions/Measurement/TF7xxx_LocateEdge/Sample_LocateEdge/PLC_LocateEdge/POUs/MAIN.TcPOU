@@ -1,0 +1,164 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{72e461b4-3bda-436c-a0aa-53c87e6530b7}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr 				: HRESULT;
+	hrFunc			: HRESULT;
+	
+	fbCamera		: FB_VN_SimpleCameraControl;
+	eState			: ETcVnCameraState;
+	
+	ipImageIn		: ITcVnImage;
+	ipImageInDisp	: ITcVnDisplayableImage;
+	ipImageRes		: ITcVnImage;
+	ipImageResDisp	: ITcVnDisplayableImage;
+	
+	// result
+	ipEdgePoints	: ITcVnContainer;	
+	
+	// parameters
+	aStartPoint		: TcVnPoint2_REAL := [850, 400];
+	aEndPoint		: TcVnPoint2_REAL := [550, 400];
+	eDirection		: ETcVnEdgeDirection := TCVN_ED_DARK_TO_LIGHT;	
+	fMinStrength	: REAL := 50;
+	nSearchLines	: UDINT := 31;
+	fSearchLineDist : REAL := 1;
+	nMaxThickness	: UDINT := 7;
+	nSubpixIter		: UDINT := 10;
+	eAlgorithm		: ETcVnEdgeDetectionAlgorithm := TCVN_EDA_INTERPOLATION;
+	fAvgStrength	: REAL;
+	
+	// Watchdog
+	hrWD			: HRESULT;
+	tStop			: DINT := 15000;
+	tRest			: DINT;
+	nFraction		: UDINT;
+	
+	// drawing
+	aLine			: TcVnVector4_LREAL;
+	aColorGreen		: TcVnVector4_LREAL := [0, 175, 0];
+	aColorBlue		: TcVnVector4_LREAL := [0, 0, 255];
+	aColorRed		: TcVnVector4_LREAL := [255, 0, 0];
+	sText			: STRING(255);
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	SAMPLE - LOCATE EDGE
+//	============================
+  	
+//	Steps To Do:
+//	-------------
+//	1. Add the images to FileSource1
+//	2. Start the PLC and take a look at the result images in ADS Image Watch 
+//	3. Change parameters using 'Write values' and observe how this influences the result and computation time, e.g. (first only change one parameter at a time, then combine changes):
+//			- aStart-/EndPoint 	: defines the search direction (e.g. set to [500, 150] and [650, 500])
+//			- eDirection		: TCVN_ED_DARK_TO_LIGHT finds the outer edge, TCVN_ED_LIGHT_TO_DARK the inner edge
+//			- fMinStrength		: compare with returned fAvgStrength, too low (e.g. 6) will be distorted by shadow and noise, too high (e.g. 80) partially does not find the edge
+//			- nSearchLines		: tradeoff between the required computation time and line approximation accuracy (e.g. set to 5 and use TCVN_ED_LIGHT_TO_DARK to see bad approximation)
+//			- fSearchLineDist	: 
+//			- nMaxThickness		: too low (dependend on fMinStrength) does not find the edge (can help to select whether only sharp egdes or also very blurred ones should be found)
+//			- nSubpixIter		: tradeoff between the required computation time and accuracy (good accuracy for about 10 with TCVN_EDA_INTERPOLATION and 100 with TCVN_EDA_APPROX_ERF)
+//			- eAlgorithm 		: TCVN_EDA_INTERPOLATION is fastest, TCVN_EDA_APPROX_ERF tends to be more accurate, TCVN_EDA_APPROX_GAUSSIAN is not suited very well here
+//			- tStop				: should always be smaller than the PLC task cycle time to prevent exceeds, can restrict the required computation time (function will return partial results)
+
+eState := fbCamera.GetState();
+
+CASE eState OF
+
+TCVN_CS_INITIAL, TCVN_CS_INITIALIZING, TCVN_CS_INITIALIZED, TCVN_CS_OPENING, TCVN_CS_OPENED, TCVN_CS_STARTACQUISITION:
+	hr := fbCamera.StartAcquisition();
+
+TCVN_CS_ACQUIRING:
+	hr := fbCamera.GetCurrentImage(ipImageIn);	
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		
+		hrWD := F_VN_StartRelWatchdog(tStop, hr);
+			hrFunc := F_VN_LocateEdgeExp(
+					ipSrcImage				:= ipImageIn, 
+					ipEdgePoints			:= ipEdgePoints, 
+					aStartPoint				:= aStartPoint, 
+					aEndPoint				:= aEndPoint, 
+					eEdgeDirection			:= eDirection, 
+					fMinStrength			:= fMinStrength, 
+					nSearchLines			:= nSearchLines,
+					fSearchLineDist			:= fSearchLineDist, 
+					nMaxThickness			:= nMaxThickness, 
+					nSubpixelsIterations	:= nSubpixIter, 
+					fApproxPrecision		:= 0.0001, 
+					eAlgorithm				:= eAlgorithm, 
+					hrPrev					:= hr, 
+					fAvgStrength			=> fAvgStrength);
+					
+		hrWD := F_VN_StopWatchdog(hrWD, nFractionProcessed=>nFraction, tRest=>tRest);
+		
+		// Draw result for visualization
+		hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_GRAY_TO_RGB, hr);	
+		sText := CONCAT(CONCAT('Processed  ', UDINT_TO_STRING(nFraction)), '%');
+		hr := F_VN_PutTextExp(sText, ipImageRes, 25, 50, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorGreen, 2, TCVN_LT_8_CONNECTED, FALSE, hr);
+		sText := CONCAT(CONCAT('Time       ', DINT_TO_STRING(tStop - tRest)), 'us');		
+		hr := F_VN_PutTextExp(sText, ipImageRes, 25, 100, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorGreen, 2, TCVN_LT_8_CONNECTED, FALSE,hr);
+		sText := CONCAT('Returncode ', DINT_TO_STRING(hrFunc));	
+		
+		hr := F_VN_PutTextExp(sText, ipImageRes, 25, 150, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorGreen, 2, TCVN_LT_8_CONNECTED, FALSE,hr);	
+		hr := F_VN_DrawPoint(REAL_TO_UDINT(aStartPoint[0]), REAL_TO_UDINT(aStartPoint[1]), ipImageRes, TCVN_DS_CIRCLE, aColorRed, hr);
+		hr := F_VN_DrawPoint(REAL_TO_UDINT(aEndPoint[0]), REAL_TO_UDINT(aEndPoint[1]), ipImageRes, TCVN_DS_X, aColorRed, hr);			
+		hr := F_VN_FitLine(ipEdgePoints, aLine, hr);
+		hr := F_VN_DrawLine_TcVnVector4_LREAL(aLine, ipImageRes, aColorGreen, 2, hr);
+		hr := F_VN_DrawPointsExp(ipEdgePoints, ipImageRes, TCVN_DS_PLUS, aColorBlue, 1, 1, TCVN_LT_8_CONNECTED, hr);		
+		
+		// Display source and result image		
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, S_OK);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, S_OK);
+	END_IF
+	
+TCVN_CS_ERROR:
+	hr := fbCamera.Reset();	
+
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="88" Count="51" />
+      <LineId Id="233" Count="0" />
+      <LineId Id="141" Count="22" />
+      <LineId Id="190" Count="0" />
+      <LineId Id="165" Count="8" />
+      <LineId Id="191" Count="0" />
+      <LineId Id="174" Count="14" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="189" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

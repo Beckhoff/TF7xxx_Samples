@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{cfed027f-bbf5-45fe-9f85-da821ab026a0}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr					:	HRESULT;
+
+	aImages				:	ARRAY[0..9] OF ITcVnImage;
+	ipImageFused		:	ITcVnImage;
+	ipImageFusedDisp	:	ITcVnDisplayableImage;
+
+	nImages				:	UDINT := 5;
+	nHeight				:	UDINT := 10;
+	i					:	UDINT;
+	aColor				:	ARRAY[0..9] OF TcVnVector4_LREAL := [[255,0,0], [200,50,0], [150,100,0], [100,150,0], [50,200,0], [0,250,0], [0,200,50], [0,150,100], [0,100,150], [0,50,200]];		
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Fuse Images Array
+//	----------------------------------------
+
+FOR i := 0 TO nImages-1 DO
+	hr := F_VN_CreateImageAndSetPixels(aImages[i], 100, nHeight, ETcVnElementType.TCVN_ET_USINT, 3, aColor[i], hr);
+END_FOR
+
+hr := F_VN_FuseImagesArray(aImages, nImages, ipImageFused, 0, nImages * nHeight, hr);
+hr := F_VN_TransformIntoDisplayableImage(ipImageFused, ipImageFusedDisp, hr);
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="17" Count="34" />
+      <LineId Id="53" Count="2" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="56" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

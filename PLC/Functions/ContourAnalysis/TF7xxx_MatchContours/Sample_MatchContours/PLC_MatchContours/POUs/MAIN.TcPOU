@@ -1,0 +1,196 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{df57ce06-b30a-4c7d-9b3c-2899560be5b9}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	// Camera
+	fbCamera			:	FB_VN_SimpleCameraControl;
+	eState				:	ETcVnCameraState;
+	
+	// Images
+	ipImageIn			:	ITcVnImage;
+	ipImageInDisp		:	ITcVnDisplayableImage;
+	ipImageRes			:	ITcVnImage;
+	ipImageResDisp		:	ITcVnDisplayableImage;
+	
+	// Contours
+	ipContourList		:	ITcVnContainer;
+	ipIterator			:	ITcVnForwardIterator;
+	ipContourReference	:	ITcVnContainer;
+	ipContourCheck		:	ITcVnContainer;
+	fBestDissimilarity	:	LREAL;
+	fDissimilarity		:	LREAL;
+	
+	// Parameters
+	fThreshold			:	REAL := 170;
+	fMinArea			:	REAL := 10000;
+	fMaxDissimilarity	:	LREAL := 0.01;
+	eComparisonMethod	:	ETcVnContoursMatchComparisonMethod := TCVN_CMCM_CONTOURS_MATCH_I3;
+	
+	// Drawing
+	aColorGreen			:	TcVnVector4_LREAL := [0, 175, 0];
+	aColorBlue			:	TcVnVector4_LREAL := [0, 0, 255];
+	aColorRed			:	TcVnVector4_LREAL := [255, 0, 0];
+	aColorRes			:	TcVnVector4_LREAL;
+	sText				:	STRING(255);
+	sTextReference		:	STRING(255) := 'Reference contour';
+	sTextCheck			:	STRING(255) := 'Check dissimilarity';
+	
+	// Miscellaneous
+	bDarkBackground		:	BOOL;
+	nContours			:	ULINT;
+	nCounter			:	UINT := 0;
+	aPixelValue			:	TcVnVector4_LREAL;
+	stBoundingRectangle	:	TcVnRectangle_UDINT;
+	stParams			:	TcVnParamsBlobDetection;
+	hr 					:	HRESULT;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Match Contours (Reference Contours)
+//	----------------------------------------
+
+//	Steps to do:
+//	 1.	Add the images to FileSource1
+//	 2.	Start the PLC and take a look at the result images in ADS Image Watch 
+//	 3.	Change parameters using 'Write values' and observe how this influences the result, e.g. (first only change one parameter at a time, then combine changes):
+//		- fThreshold	 	: defines the gray value threshold for image binarization in the blob detection algorithm
+//		- fMinArea			: defines the minimum area of an accepted contour in the blob detection algorithm
+//		- fMaxDissimilarity	: the maximum dissimilarity between two contours which is still considered equal
+//		- eComparisonMethod	: enum describing the algorithm which is used for calculation of the dissimilarity in the MatchContours function (see documentation of F_VN_MatchContours for details)
+
+stParams.bFilterByArea := TRUE;
+stParams.fMinArea := fMinArea;
+stParams.fMinThreshold := fThreshold;
+
+eState := fbCamera.GetState();
+
+CASE eState OF
+
+TCVN_CS_INITIAL, TCVN_CS_INITIALIZING, TCVN_CS_INITIALIZED, TCVN_CS_OPENING, TCVN_CS_OPENED, TCVN_CS_STARTACQUISITION:
+	hr := fbCamera.StartAcquisition();
+
+TCVN_CS_ACQUIRING:
+	hr := fbCamera.GetCurrentImage(ipImageIn);	
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		
+		// Prepare result image
+		hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_GRAY_TO_RGB, hr);
+		
+		// Check if background is dark in order to identify reference image
+		hr := F_VN_GetPixel(ipImageIn, aPixelValue, 50, 50, hr);
+		bDarkBackground := SUCCEEDED(hr) AND_THEN aPixelValue[0] < 128;
+		
+		IF bDarkBackground THEN
+			stParams.eThresholdType := TCVN_TT_BINARY;
+		ELSE
+			stParams.eThresholdType := TCVN_TT_BINARY_INV;
+		END_IF
+		
+		// Find contours in image
+		hr := F_VN_DetectBlobs(ipImageIn, ipContourList, stParams, hr);
+		
+		// Distinguish reference and test image
+		IF bDarkBackground THEN
+
+			// Select one of the found contours as reference for matching
+			hr := F_VN_GetNumberOfElements(ipContourList, nContours, hr);
+			hr := F_VN_GetAt_ITcVnContainer(ipContourList, ipContourReference, nCounter MOD nContours, hr);
+
+			// Draw selected contour and text
+			hr := F_VN_PutTextExp(sTextReference, ipImageRes, 50, 50, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorBlue, 2, TCVN_LT_8_CONNECTED, FALSE, hr);
+			hr := F_VN_DrawContours(ipContourReference, -1, ipImageRes, aColorBlue, 5, hr);
+			
+			nCounter := nCounter + 1;
+		
+		ELSE
+			
+			fBestDissimilarity := 10E300;
+			
+			// Iterate through all found contours
+			hr := F_VN_GetForwardIterator(ipContourList, ipIterator, hr);
+			WHILE hr = S_OK AND_THEN ipIterator.CheckIfEnd() <> S_OK DO
+				hr := F_VN_GetContainer(ipIterator, ipContourCheck, hr);
+				hr := F_VN_IncrementIterator(ipIterator, hr);
+				
+				// Match the current contour with the selected reference contour
+				hr := F_VN_MatchContours(ipContourReference, ipContourCheck, eComparisonMethod, fDissimilarity, hr);
+				
+				// Save best result
+				IF fBestDissimilarity > fDissimilarity THEN
+					fBestDissimilarity := fDissimilarity;
+				END_IF
+				
+				// Choose action depending on the dissimilarity of both contours
+				IF SUCCEEDED(hr) AND_THEN fDissimilarity < fMaxDissimilarity THEN
+					aColorRes := aColorGreen;
+				ELSE
+					aColorRes := aColorRed;
+				END_IF
+				
+				// Draw matching results
+				sText := REAL_TO_STRING(LREAL_TO_REAL(fDissimilarity));
+				hr := F_VN_UprightBoundingRectangle(ipContourCheck, stBoundingRectangle, hr);
+				hr := F_VN_DrawContours(ipContourCheck, -1, ipImageRes, aColorRes, 5, hr);
+				hr := F_VN_PutTextExp(sText, ipImageRes, LREAL_TO_UDINT(stBoundingRectangle.nX + 30), LREAL_TO_UDINT(stBoundingRectangle.nY + (stBoundingRectangle.nHeight / 2)), TCVN_FT_HERSHEY_SIMPLEX, 0.8, aColorRes, 2, TCVN_LT_8_CONNECTED, FALSE, hr);
+
+			END_WHILE
+			
+			// Draw text
+			hr := F_VN_PutTextExp(sTextCheck, ipImageRes, 50, 50, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorGreen, 2, TCVN_LT_8_CONNECTED, FALSE, hr);
+			sText := CONCAT('Best match: ', REAL_TO_STRING(LREAL_TO_REAL(fBestDissimilarity)));
+			hr := F_VN_PutTextExp(sText, ipImageRes, 50, 100, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorGreen, 2, TCVN_LT_8_CONNECTED, FALSE, hr);
+			
+		END_IF
+
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+		
+	END_IF
+	
+TCVN_CS_ERROR:
+	hr := fbCamera.Reset();	
+
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="51" Count="49" />
+      <LineId Id="231" Count="0" />
+      <LineId Id="102" Count="83" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="186" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

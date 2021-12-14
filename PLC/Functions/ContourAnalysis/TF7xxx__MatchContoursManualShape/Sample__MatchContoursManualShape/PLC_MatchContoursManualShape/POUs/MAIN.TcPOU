@@ -1,0 +1,209 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{5108211c-2d61-4e41-abe9-24c2127936ed}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR CONSTANT
+	// Indexes representing the different shapes
+	TRIANGLE		:	USINT := 0;
+	RECTANGLE		:	USINT := 1;
+	TRAPEZOID		:	USINT := 2;
+END_VAR
+VAR
+	// Camera
+	fbCamera			:	FB_VN_SimpleCameraControl;
+	eState				:	ETcVnCameraState;
+	
+	// Images
+	ipImageIn			:	ITcVnImage;
+	ipImageInDisp		:	ITcVnDisplayableImage;
+	ipImageRes			:	ITcVnImage;
+	ipImageResDisp		:	ITcVnDisplayableImage;
+	
+	// Contours
+	ipContourList		:	ITcVnContainer;
+	ipContour			:	ITcVnContainer;
+	ipIterator			:	ITcVnForwardIterator;
+	aShapeArrays		:	ARRAY [0..2] OF CustomTcVnArray4_Point2_DINT :=
+								[[[0,0],[40,0],[20, LREAL_TO_DINT(SQRT(1200))], [0,0]],	// Triangle
+								 [[0,0],[40,0],[40,40],[0,40]], 						// Rectangle
+								 [[0,0],[40,0],[60,22],[20,22]]]; 						// Trapezoid
+	aShapes				:	ARRAY[0..2] OF ITcVnContainer;
+	ipShapes			:	ITcVnContainer;
+	
+	// Matching
+	ipMatchIndexes		:	ITcVnContainer;
+	ipDissimilarities	:	ITcVnContainer;
+	aMatchIndexes		:	ARRAY [0..2] OF ULINT;
+	aDissimilarities	:	ARRAY [0..2] OF LREAL;
+	
+	// Parameters
+	stBlobParams		:	TcVnParamsBlobDetection;
+	fThreshold			:	REAL := 170;
+	fMinArea			:	REAL := 10000;
+	fMaxDissimilarity 	:	LREAL := 0.02;
+	eComparisonMethod	:	ETcVnContoursMatchComparisonMethod := TCVN_CMCM_CONTOURS_MATCH_I3;
+	
+	// drawing
+	aColors				:	ARRAY[0..2] OF TcVnVector4_LREAL :=
+								[[0, 175, 0, 0], [0, 0, 255, 0], [255, 0, 0, 0]]; // green, blue, red
+	aColorWhite			:	TcVnVector4_LREAL := [255, 255, 255];
+	aColorBlack			:	TcVnVector4_LREAL := [0, 0, 0];
+	aTexts				:	ARRAY[0..2] OF STRING := ['Triangle', 'Rectangle', 'Trapezoid'];
+	sText				:	STRING(255);
+	nTopLeftX			:	UDINT;
+	nTopLeftY			:	UDINT;
+	
+	// Miscellaneous
+	aPixelValue			:	TcVnVector4_LREAL;
+	i					:	USINT;
+	stBoundingRectangle	:	TcVnRectangle_UDINT;
+	aOffsets			:	ARRAY [0..2] OF TcVnPoint := [[20, 50], [20, 100], [20, 160]];
+	hr 					:	HRESULT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Match Contours (Manual Shape)
+//	----------------------------------------
+
+//	Steps to do:
+//	 1.	Add the images to FileSource1
+//	 2.	Start the PLC and take a look at the result images in ADS Image Watch 
+//	 3.	Change parameters using 'Write values' and observe how this influences the result, e.g. (first only change one parameter at a time, then combine changes):
+//	 	- fThreshold	 	: defines the gray value threshold for image binarization in the blob detection algorithm
+//	 	- fMinArea			: defines the minimum area of an accepted contour in the blob detection algorithm
+//	 	- fMaxDissimilarity	: the maximum dissimilarity between two contours which is still considered equal
+//	 	- eComparisonMethod	: enum describing the algorithm which is used for calculation of the dissimilarity in the MatchContours function (see documentation of F_VN_MatchContours for details)
+
+eState := fbCamera.GetState();
+
+CASE eState OF
+
+TCVN_CS_INITIAL, TCVN_CS_INITIALIZING, TCVN_CS_INITIALIZED, TCVN_CS_OPENING, TCVN_CS_OPENED, TCVN_CS_STARTACQUISITION:
+	hr := fbCamera.StartAcquisition();
+
+TCVN_CS_ACQUIRING:
+	hr := fbCamera.GetCurrentImage(ipImageIn);	
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		
+		// Fill manually defined shapes into one container
+		hr := F_VN_CreateContainer(ipShapes, ContainerType_Vector_Vector_TcVnPoint2_DINT, 0, hr);
+		FOR i:=TRIANGLE TO TRAPEZOID DO
+			hr := F_VN_CreateContainerFromArray(ADR(aShapeArrays[i]), aShapes[i], ContainerType_Vector_TcVnPoint2_DINT, 4, hr);
+			hr := F_VN_InsertIntoContainer_ITcVnContainer(aShapes[i], ipShapes, i, hr);
+		END_FOR
+		
+		// Prepare result image
+		hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_GRAY_TO_RGB, hr);
+		
+		// Check if background is light or dark
+		hr := F_VN_GetPixel(ipImageIn, aPixelValue, 50, 50, hr);
+		IF SUCCEEDED(hr) AND_THEN aPixelValue[0] < 128 THEN
+			stBlobParams.eThresholdType := TCVN_TT_BINARY;
+		ELSE
+			stBlobParams.eThresholdType := TCVN_TT_BINARY_INV;
+		END_IF
+		
+		// Find contours in image
+		stBlobParams.bFilterByArea := TRUE;
+		stBlobParams.fMinArea := fMinArea;
+		stBlobParams.fMinThreshold := fThreshold;
+		hr := F_VN_DetectBlobs(ipImageIn, ipContourList, stBlobParams, hr);
+
+		// Iterate through all found contours
+		hr := F_VN_GetForwardIterator(ipContourList, ipIterator, hr);
+		WHILE hr = S_OK AND_THEN ipIterator.CheckIfEnd() <> S_OK DO
+			hr := F_VN_GetContainer(ipIterator, ipContour, hr);
+			hr := F_VN_IncrementIterator(ipIterator, hr);
+			
+			// Match the current contour with the reference shapes
+			hr := F_VN_MatchContours1vsN(
+				ipRefContour:= ipContour, 
+				ipContours:= ipShapes, 
+				ipMatchIndexes:= ipMatchIndexes, 
+				ipDissimilarities:= ipDissimilarities, 
+				fDissimilarityThreshold:= 100, 
+				eComparisonMethod:= eComparisonMethod, 
+				hrPrev:= hr
+			);
+			
+			hr := F_VN_ExportContainer(ipMatchIndexes, ADR(aMatchIndexes), SIZEOF(aMatchIndexes), hr);
+			hr := F_VN_ExportContainer(ipDissimilarities, ADR(aDissimilarities), SIZEOF(aDissimilarities), hr);
+			
+			// Draw matching results
+			IF aDissimilarities[0] < fMaxDissimilarity THEN
+				
+				// Calculate position of object
+				hr := F_VN_UprightBoundingRectangle(ipContour, stBoundingRectangle, hr);
+				nTopLeftX := LREAL_TO_UDINT(stBoundingRectangle.nX + 30);
+				nTopLeftY := LREAL_TO_UDINT(stBoundingRectangle.nY + (stBoundingRectangle.nHeight / 2));
+				
+				// Draw matching result
+				hr := F_VN_DrawContours(ipContour, -1, ipImageRes, aColors[aMatchIndexes[0]], 5, hr);
+				hr := F_VN_PutTextExp(aTexts[aMatchIndexes[0]], ipImageRes, nTopLeftX, nTopLeftY, TCVN_FT_HERSHEY_SIMPLEX, 0.8, aColors[aMatchIndexes[0]], 2, TCVN_LT_8_CONNECTED, FALSE, hr);
+				hr := F_VN_DrawRectangle(nTopLeftX, nTopLeftY + 5, nTopLeftX + 200, nTopLeftY + 85, ipImageRes, aColorBlack, -1, hr);
+				
+				// Draw all dissimilarity values
+				FOR i:=0 TO 2 DO
+					sText := CONCAT(LEFT(aTexts[aMatchIndexes[i]], 4), CONCAT(' ', REAL_TO_STRING(LREAL_TO_REAL(aDissimilarities[i]))));
+					hr := F_VN_PutTextExp(sText, ipImageRes, nTopLeftX + 5, nTopLeftY + 30 + 20*i, TCVN_FT_HERSHEY_SIMPLEX, 0.6, aColorWhite, 1, TCVN_LT_8_CONNECTED, FALSE, hr);
+				END_FOR
+				
+			END_IF
+		END_WHILE
+		
+		// Draw reference shapes
+		FOR i:=TRIANGLE TO TRAPEZOID DO
+			hr := F_VN_DrawContoursExp(aShapes[i], -1, ipImageRes, aColors[i], 2, TCVN_LT_8_CONNECTED, 0, 0, aOffsets[i], hr);
+		END_FOR
+
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+		
+	END_IF
+	
+TCVN_CS_ERROR:
+	hr := fbCamera.Reset();	
+
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="65" Count="45" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="112" Count="85" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="198" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

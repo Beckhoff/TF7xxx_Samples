@@ -1,0 +1,204 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{ddc02eb7-8fac-44c5-9063-86080452a88c}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	// Camera
+	hr						:	HRESULT;
+	fbCamera				:	FB_VN_GevCameraControl;
+	eState					:	ETcVnCameraState;
+	
+	// Images
+	ipImageIn				:	ITcVnImage;
+	ipImageInDisp			:	ITcVnDisplayableImage;
+	ipImageRes				:	ITcVnImage;
+	ipImageResDisp			:	ITcVnDisplayableImage;	
+
+	// Calibration results
+	aCameraMatrix			:	TcVnMatrix3x3_LREAL;
+	aDistortionCoefficients	:	TcVnArray8_LREAL;
+	aRotationMatrix			:	TcVnMatrix3x3_LREAL;
+	aTranslationVector		:	TcVnVector3_LREAL;
+	
+	// Transformation
+	aPointImage				:	TcVnPoint2_LREAL;
+	aPointWorld				:	TcVnPoint3_LREAL;
+	i						:	INT;
+	aCoordinatesWorld		:	ARRAY[0..4] OF TcVnPoint3_LREAL := [ [0,0,0], [50,0,0], [-50, 0, 0], [0, 50, 0], [0, -50, 0] ];
+	aCoordinatesImage		:	ARRAY[0..4] OF TcVnPoint2_REAL;
+	aLine					:	TcVnVector4_DINT;
+	
+	// Object detection
+	stBlobParams			:	TcVnParamsBlobDetection;
+	ipBlobContours			:	ITcVnContainer;
+	ipIterator				:	ITcVnForwardIterator;
+	ipContour				:	ITcVnContainer;
+	sText					:	STRING;
+	
+	// Miscellaneous
+	aColorRed				:	TcVnVector4_LREAL := [255, 0, 0];
+	aColorGreen				:	TcVnVector4_LREAL := [0, 255, 0];
+	aColorBlue				:	TcVnVector4_LREAL := [0, 0, 255];
+	bInit					:	BOOL := TRUE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, July 2019
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Camera Calibration & Coordinate Transformation
+//	----------------------------------------
+
+//	Steps to do:
+//	 1. Calibrate the Camera via the Calibration Assistant with the Calibration Images
+//	 2. Write the Calibration Params into the Image Provider of the Camera Object
+//	 4. Start the PLC
+//	 4. Start the Camera Simulation with the Stream File
+
+// Read the Calibration Params from the Image Provider
+IF bInit THEN
+	bInit := FALSE;
+	hr := fbCamera.GetCameraMatrix(aCameraMatrix);
+	hr := fbCamera.GetDistortionCoefficients(aDistortionCoefficients);
+	hr := fbCamera.GetRotationMatrix(aRotationMatrix);
+	hr := fbCamera.GetTranslationVector(aTranslationVector);
+END_IF
+
+// Camera State Machine
+eState:= fbCamera.GetState();
+
+CASE eState OF
+	
+	TCVN_CS_ERROR:
+		hr:= fbCamera.Reset();
+	
+	TCVN_CS_INITIAL, TCVN_CS_INITIALIZING, TCVN_CS_INITIALIZED, TCVN_CS_OPENING, TCVN_CS_OPENED, TCVN_CS_STARTACQUISITION:
+		hr:= fbCamera.StartAcquisition();
+	
+	TCVN_CS_ACQUIRING:
+		hr:= fbCamera.GetCurrentImage(ipImageIn);
+	
+		IF SUCCEEDED(hr) AND ipImageIn  <> 0 THEN
+			
+			// Create Result Image
+			hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_GRAY_TO_RGB, hr);
+			
+			// Draw Coordination System into the result image
+			FOR i:= 0 TO 4 DO
+				hr := F_VN_TransformCoordinatesWorldToImage_Point(
+						aSrcPoint				:=	aCoordinatesWorld[i], 
+						aDestPoint				:=	aCoordinatesImage[i], 
+						aCameraMatrix			:=	aCameraMatrix, 
+						aDistortionCoefficients	:=	aDistortionCoefficients, 
+						aRotationMatrix			:=	aRotationMatrix, 
+						aTranslationVector		:=	aTranslationVector, 
+						hrPrev					:=	hr);
+						
+				IF i > 0 THEN	
+					aLine[0] := REAL_TO_DINT(aCoordinatesImage[0][0]);
+					aLine[1] := REAL_TO_DINT(aCoordinatesImage[0][1]);
+					aLine[2] := REAL_TO_DINT(aCoordinatesImage[i][0]);
+					aLine[3] := REAL_TO_DINT(aCoordinatesImage[i][1]);			
+					hr := F_VN_DrawLine_TcVnVector4_DINT(aLine , ipImageRes, aColorGreen, 3, hr);
+				END_IF			
+			END_FOR
+												
+			// Blob Detection to find the four point the the image
+			stBlobParams.bFilterByArea := TRUE;
+			stBlobParams.fMinArea := 100;
+			stBlobParams.fMaxArea := 500;
+			stBlobParams.eThresholdType := TCVN_TT_BINARY;
+			stBlobParams.fMinThreshold := 170;
+			stBlobParams.fThresholdStep := 0;
+			
+			hr := F_VN_DetectBlobs(ipImageIn, ipBlobContours, stBlobParams, hr);
+			hr := F_VN_DrawContours(ipBlobContours, -1, ipImageRes, aColorRed, 3, hr);
+			hr := F_VN_GetForwardIterator(ipBlobContours, ipIterator, hr);
+			
+			// Calculate the real world position of each found point
+			WHILE SUCCEEDED(hr) AND_THEN ipIterator.CheckIfEnd() <> S_OK DO
+				hr := F_VN_GetContainer(ipIterator, ipContour, hr);
+				hr := F_VN_IncrementIterator(ipIterator, hr);
+
+				// Calculate the image position
+				hr := F_VN_ContourCenterOfMass(ipContour, aPointImage, hr);	
+				
+				// Coordinate Transformation to retrieve the real world position
+				hr := F_VN_TransformCoordinatesImageToWorld_Point(
+					aSrcPoint				:= aPointImage, 
+					aDestPoint				:= aPointWorld, 
+					aCameraMatrix			:= aCameraMatrix, 
+					aDistortionCoefficients	:= aDistortionCoefficients, 
+					aRotationMatrix			:= aRotationMatrix, 
+					aTranslationVector		:= aTranslationVector, 
+					fZ						:= 0, 
+					hrPrev					:= hr);
+				
+				// Write the World Coordinate into the Result Image													
+				sText := CONCAT('(', LREAL_TO_FMTSTR(aPointWorld[0],1,TRUE));
+				sText := CONCAT(sText, ', ');
+				sText := CONCAT(sText, LREAL_TO_FMTSTR(aPointWorld[1],1,TRUE));
+				sText := CONCAT(sText, ')');																
+				hr := F_VN_PutText(sText, ipImageRes, TO_UDINT(aPointImage[0]-150), TO_UDINT(aPointImage[1]+50), EtcVnFontType.TCVN_FT_HERSHEY_PLAIN, 2, aColorRed, hr);
+			END_WHILE
+			
+			// Display Input Image
+			hr:= F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+				
+			// Disply Result Image
+			hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+			
+		END_IF
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="46" Count="35" />
+      <LineId Id="225" Count="0" />
+      <LineId Id="83" Count="25" />
+      <LineId Id="112" Count="13" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="280" Count="0" />
+      <LineId Id="273" Count="3" />
+      <LineId Id="266" Count="0" />
+      <LineId Id="133" Count="9" />
+      <LineId Id="185" Count="0" />
+      <LineId Id="143" Count="21" />
+      <LineId Id="166" Count="6" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="181" Count="1" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="176" Count="3" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="180" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

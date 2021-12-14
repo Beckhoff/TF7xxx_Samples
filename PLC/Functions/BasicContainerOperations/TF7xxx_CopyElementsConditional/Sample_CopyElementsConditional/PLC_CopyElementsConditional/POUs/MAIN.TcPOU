@@ -1,0 +1,79 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{80186176-5697-4476-9a64-8d60308917ec}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR CONSTANT
+	cNumberOfSubContainers	:	INT := 5;	//	Number of sub-containers to add
+END_VAR
+VAR
+	aContainerStructure		:	ARRAY [0..(cNumberOfSubContainers-1)] OF INT := [2, 7, 3, 5, 12];
+	ipHelper				:	ITcVnContainer;
+	ipContainerBase			:	ITcVnContainer;
+	ipContainerFiltered		:	ITcVnContainer;
+	fbCondition				:	FB_ConditionMoreThanFive;
+	nSelectedContainers		:	ULINT;
+	hr						:	HRESULT;
+	i						:	INT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Copy elements conditionally
+//	----------------------------------------
+
+
+// Fill ipContainerBase with specified elements
+hr := F_VN_CreateContainer(ipContainerBase, ContainerType_Vector_Vector_REAL, 0, hr);
+hr := F_VN_ReserveContainerMemory(ipContainerBase, TO_ULINT(cNumberOfSubContainers), hr);
+FOR i:=0 TO (cNumberOfSubContainers-1) DO
+	hr := F_VN_CreateContainer(ipHelper, ContainerType_Vector_REAL, TO_ULINT(aContainerStructure[i]), hr);
+	hr := F_VN_AppendToContainer_ITcVnContainer(ipHelper, ipContainerBase, hr);
+END_FOR
+
+// Copy only elements into ipContainerFiltered, that fulfill the condition (here: more than five sub elements)
+hr := F_VN_CopyContainerElementsConditional_ITcVnContainer(
+	ipSrcContainer		:=	ipContainerBase,
+	ipDestContainer		:=	ipContainerFiltered,
+	ipConditionFB		:=	fbCondition,
+	hr);
+
+// Count containers that validate the condition (here: number of container with more than five sub elements)
+hr := F_VN_GetNumberOfElements(ipContainerFiltered, nSelectedContainers, hr);
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="352" Count="51" />
+      <LineId Id="19" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

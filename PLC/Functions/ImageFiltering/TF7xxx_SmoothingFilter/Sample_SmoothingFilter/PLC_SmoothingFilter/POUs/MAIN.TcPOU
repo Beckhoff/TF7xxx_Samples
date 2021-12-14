@@ -1,0 +1,174 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{287841a8-2332-46c0-886c-42df5183e54d}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+
+VAR
+	hr						:	HRESULT;
+	ipImageIn				:	ITcVnImage;
+	ipImageInDisp			:	ITcVnDisplayableImage;
+	fbCameraControl			:	FB_VN_SimpleCameraControl;
+	eCameraState			:	ETcVnCameraState;
+	
+	// Watchdog
+	hrWD 					:	HRESULT;
+	tWDStop					:	DINT := 85_000;	(* Stop time in us *)
+	tRest 					:	DINT;
+	nFunctionsMonitored		:	ULINT;
+	nFractionProcessed 		:	UDINT;	
+	tDuration 				:	DINT;
+	
+	// Bilateral Filter
+	ipImageBilateral		:	ITcVnImage;
+	ipImageBilateralDisp	:	ITcVnDisplayableImage;
+	nBilateral_Diameter		:	DINT	:=	7;
+	fBilateral_SigmaColor	:	LREAL	:=	100;
+	fBilateral_SigmaSpace	:	LREAL	:=	100;
+	
+	// Gaussian Filter
+	ipImageGaussian			:	ITcVnImage;
+	ipImageGaussianDisp		:	ITcVnDisplayableImage;
+	nFilterWidth			:	UDINT	:=	7;
+	nFilterHeight			:	UDINT	:=	7;
+	
+	// Median Filter
+	ipImageMedian			:	ITcVnImage;
+	ipImageMedianDisp		:	ITcVnDisplayableImage;
+	nMedian_FilterSize		:	UDINT	:=	7;
+	
+	// Custom Filter e.g. Mean
+	ipImageCustom			:	ITcVnImage;
+	ipImageCustomDisp		:	ITcVnDisplayableImage;
+	stKernelMatrix			:	TcVnMatrix;
+	// 7x7 Mean Filter Kernel with weights of 1/49 ~ 0.0204081632653
+	aMatrixArray7x7			:	ARRAY [0..6, 0..6] OF REAL := [49(0.0204081632653)];
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Smoothing Filter
+//	----------------------------------------
+
+//	Steps to do:
+//	 1. Add images to the FileSource1
+
+// Get camera state
+eCameraState := fbCameraControl.GetState();
+
+// CameraControl is in error state, so try to reset the camera connection
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+
+// Camera not yet streaming
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+						
+		hrWD := F_VN_StartRelWatchdog(tWDStop, hr);
+
+			// Execute the Bilateral Filter Function monitored by the Watchdog function
+			// ------------------------------------------------------------------------			
+			hr := F_VN_BilateralFilter(
+						ipSrcImage      :=  ipImageIn,
+						ipDestImage     :=  ipImageBilateral,
+						nDiameter       :=  nBilateral_Diameter,
+						fSigmaColor     :=  fBilateral_SigmaColor,
+						fSigmaSpace     :=  fBilateral_SigmaSpace,
+						hrPrev          :=  hr);
+
+			hr := F_VN_TransformIntoDisplayableImage(ipImageBilateral, ipImageBilateralDisp, hr);
+			
+			// Execute the Gaussian Filter Function monitored by the Watchdog function
+			// -----------------------------------------------------------------------
+			hr := F_VN_GaussianFilter(
+						ipSrcImage      :=  ipImageIn,
+						ipDestImage     :=  ipImageGaussian,
+						nFilterWidth	:=	nFilterWidth, 
+						nFilterHeight	:=	nFilterHeight, 
+						hrPrev          :=  hr);
+
+			hr := F_VN_TransformIntoDisplayableImage(ipImageGaussian, ipImageGaussianDisp, hr);
+			
+			// Execute the Median Filter Function monitored by the Watchdog function
+			// ---------------------------------------------------------------------
+			hr := F_VN_MedianFilter(
+						ipSrcImage      :=  ipImageIn,
+						ipDestImage     :=  ipImageMedian,
+						nFilterSize     :=  nMedian_FilterSize,
+						hrPrev          :=  hr);
+		
+			hr := F_VN_TransformIntoDisplayableImage(ipImageMedian, ipImageMedianDisp, hr);
+			
+			// Prepare the Custom Matrix and Execute the Custom Filter Function monitored by the Watchdog function
+			// ---------------------------------------------------------------------------------------------------
+			hr := F_VN_InitMatrixStruct(
+						pSrcBuffer 		:= ADR(aMatrixArray7x7),
+						stDestMatrix 	:= stKernelMatrix,
+						nRows 			:= 7,
+						nCols 			:= 7,
+						eElementType 	:= TCVN_ET_REAL,
+						hrPrev 			:= hr);
+						
+			hr := F_VN_CustomFilter(
+						ipSrcImage		:= ipImageIn,
+						ipDestImage		:= ipImageCustom,
+						eDestDepth		:= TCVN_ET_USINT,
+						stKernel		:= stKernelMatrix,
+						hrPrev			:= hr);
+		
+			hr := F_VN_TransformIntoDisplayableImage(ipImageCustom, ipImageCustomDisp, hr);
+				
+		hrWD := F_VN_StopWatchdog(hrWD, nFunctionsMonitored => nFunctionsMonitored, nFractionProcessed => nFractionProcessed, tRest => tRest);
+		
+		// Calculate the required time
+		tDuration := tWDStop - tRest;
+		
+		// Display Input Image
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="48" Count="63" />
+      <LineId Id="119" Count="45" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="170" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

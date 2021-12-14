@@ -1,0 +1,151 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{2e1be9f4-7b06-4e3b-b240-7a71f8172e22}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr				:	HRESULT;
+	
+	fbCamera		:	FB_VN_SimpleCameraControl;
+	eState			:	ETcVnCameraState;
+	
+	ipImageIn		:	ITcVnImage;
+	ipImageInDisp	:	ITcVnDisplayableImage;
+	
+	ipImageRes		:	ITcVnImage;
+	ipImageResDisp	:	ITcVnDisplayableImage;
+	
+	
+	// Data Matrix Code
+	ipCodeDecodedList	:	ITcVnContainer;
+	ipCodeContourList	:	ITcVnContainer;
+	sCodeAsString		: 	STRING(255);
+		
+	// Watchdog
+    hrWD				:	HRESULT;
+	tStop				:	DINT := 20000;
+    tRest				:	DINT;
+	
+	// Output
+	sText				:	STRING;
+	
+	// Color
+	aColorRed			:	TcVnVector4_LREAL := [255, 0, 0];
+	aColorBlack			:	TcVnVector4_LREAL := [0, 0, 0];
+	aColorWhite			:	TcVnVector4_LREAL := [255, 255, 255];
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+  	
+//	-----------------------------------------------------------------------------------------
+
+//	SAMPLE - Data Matrix Code Reading
+//	=================================
+  	
+//	Steps To Do:
+//	------------
+//	1. Add the sample images to the FileSource1
+
+eState := fbCamera.GetState();
+
+CASE eState OF
+	
+TCVN_CS_INITIAL, TCVN_CS_INITIALIZING, TCVN_CS_INITIALIZED, TCVN_CS_OPENING, TCVN_CS_OPENED, TCVN_CS_STARTACQUISITION:
+	hr := fbCamera.StartAcquisition();
+	
+TCVN_CS_ACQUIRING:
+
+	hr := fbCamera.GetCurrentImage(ipImageIn);
+
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		
+		// Create Result Image
+		hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_Gray_TO_RGB, hr);
+	
+		// Execute the DMC Code Reading Function monitored by the Watchdog function
+		// --------------------------------------------------------------------------
+		hrWD := F_VN_StartRelWatchdog(tStop, S_OK);
+			hr := F_VN_ReadDataMatrixCodeExp(
+				ipSrcImage		:=	ipImageIn,
+				ipDecodedData	:=	ipCodeDecodedList,
+				ipContours		:=	ipCodeContourList,
+				nCodeNumber		:=	1,
+				eSearchStrategy	:=	TCVN_CSS_ONLY_NOT_FLIPPED,
+				hrPrev			:=	hr
+			);
+		hrWD := F_VN_StopWatchdog(hrWD, tRest => tRest);
+		
+		// Check if the function was executed successfully 
+		IF hr = S_OK THEN
+			// Export Code into String
+			hr := F_VN_ExportSubContainer_String(ipCodeDecodedList, 0, sCodeAsString, 255, hr);		
+			
+			// Write Code into Result Image
+			hr := F_VN_PutLabelExp(sCodeAsString, ipImageRes, 25, 50, 2, 2, ETcVnFontType.TCVN_FT_HERSHEY_PLAIN, aColorRed, aColorWhite, ETcVnLineType.TCVN_LT_8_CONNECTED, hr);
+			
+			// Draw Code Contour into Result Image
+			hr := F_VN_DrawContours(ipCodeContourList, 0, ipImageRes, aColorRed, 3, hr);
+		ELSE			
+			// Write HRESULT into Result Image
+			sText := CONCAT('Returncode ', DINT_TO_STRING(hr));
+			hr := F_VN_PutLabelExp(sText, ipImageRes, 25, 50, 2, 2, ETcVnFontType.TCVN_FT_HERSHEY_PLAIN, aColorRed, aColorWhite, ETcVnLineType.TCVN_LT_8_CONNECTED, hr);
+		END_IF
+		
+		// Write Code Reading proceeded time into Result Image
+		sText := CONCAT(CONCAT('Time: ', DINT_TO_STRING(tStop - tRest)), 'us');
+		hr := F_VN_PutLabelExp(sText, ipImageRes, 25, 80, 2, 2, ETcVnFontType.TCVN_FT_HERSHEY_PLAIN, aColorRed, aColorWhite, ETcVnLineType.TCVN_LT_8_CONNECTED, hr);
+
+		// Display Input Image
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+		
+		// Disply Result Image
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+	END_IF
+
+TCVN_CS_ERROR:
+	hr := fbCamera.Reset();
+	
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="33" Count="40" />
+      <LineId Id="160" Count="0" />
+      <LineId Id="75" Count="29" />
+      <LineId Id="192" Count="0" />
+      <LineId Id="106" Count="5" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="113" Count="3" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="118" Count="10" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="129" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

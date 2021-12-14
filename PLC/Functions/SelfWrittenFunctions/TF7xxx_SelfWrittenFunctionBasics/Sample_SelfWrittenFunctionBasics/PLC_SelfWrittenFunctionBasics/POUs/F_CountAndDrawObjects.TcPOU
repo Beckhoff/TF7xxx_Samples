@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="F_CountAndDrawObjects" Id="{db0cfad6-5b63-4035-9ce3-c2547ce80226}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_CountAndDrawObjects : HRESULT
+VAR_INPUT
+	ipSrcImage			:	ITcVnImage;
+	ipDestImage			:	REFERENCE TO ITcVnImage;
+	aColor				:	TcVnVector4_LREAL;
+	nNumberOfObjects	:	REFERENCE TO ULINT;
+	hrPrev				:	HRESULT;
+END_VAR
+VAR
+	hr					:	HRESULT;
+	ipContours			:	ITcVnContainer;
+	stParams			:	TcVnParamsBlobDetection;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Check previous HRESULT
+// Skip this function, if previous functions failed
+IF FAILED(hrPrev) THEN
+	F_CountAndDrawObjects := hrPrev;
+	RETURN;
+END_IF
+
+// Check if all the interface pointer in VAR_INPUT are valid (here: ipSrcImage)
+// Otherwise return INVALIDPARM and skip function
+IF ipSrcImage = 0 THEN
+	F_CountAndDrawObjects := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+	RETURN;
+END_IF
+
+// Examplary vision functionality
+hr := F_VN_ConvertColorSpace(ipSrcImage, ipDestImage, TCVN_CST_GRAY_TO_RGB, hr);
+stParams.bFilterByArea := TRUE;
+stParams.fMinArea := 10_000;
+stParams.fMaxArea := 100_000;
+hr := F_VN_DetectBlobs(ipSrcImage, ipContours, stParams, hr);
+hr := F_VN_GetNumberOfElements(ipContours, nNumberOfObjects, hr);
+hr := F_VN_DrawContours(ipContours, -1, ipDestImage, aColor, 5, hr);
+
+// Release all interface pointers declared in this function
+FW_SafeRelease(ADR(ipContours));
+
+// Return the HRESULT
+F_CountAndDrawObjects := hr;
+]]></ST>
+    </Implementation>
+    <LineIds Name="F_CountAndDrawObjects">
+      <LineId Id="21" Count="12" />
+      <LineId Id="40" Count="8" />
+      <LineId Id="50" Count="1" />
+      <LineId Id="53" Count="3" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

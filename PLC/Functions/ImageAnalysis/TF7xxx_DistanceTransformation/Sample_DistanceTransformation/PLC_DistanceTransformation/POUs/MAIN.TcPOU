@@ -1,0 +1,154 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{d9b329f7-b75d-4c08-bc10-e4fe161bed3a}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	// Sample parameters
+	fThreshold			:	LREAL	:=	127;	//	adjust this according to input image!
+	bInvert				:	BOOL	:=	FALSE;	//	adjust this according to input image!
+	eDistanceType		:	ETcVnDistanceType	:=	TCVN_DT_L2;
+	eMaskSize			:	ETcVnDistanceTransformationMask	:=	TCVN_DTM_5;
+	
+	hr					:	HRESULT;
+	ipImageIn			:	ITcVnImage;
+	ipImageInDisp		:	ITcVnDisplayableImage;
+	ipImageRes			:	ITcVnImage;
+	ipImageResDisp		:	ITcVnDisplayableImage;
+	fbCameraControl		:	FB_VN_SimpleCameraControl;
+	eCameraState		:	ETcVnCameraState;
+	ipImageWork			:	ITcVnImage;
+	ipImageDist			:	ITcVnImage;
+	ipImageDistDisp		:	ITcVnDisplayableImage;
+	aMax				:	TcVnVector4_LREAL;
+	aPos				:	TcVnPoint2_DINT;
+	eThresholdType		:	ETcVnThresholdType;
+	stImageInfo			:	TcVnImageInfo;
+	fRadius				:	LREAL;
+	aCenter				:	TcVnPoint2_DINT;
+	aRed				:	TcVnVector4_LREAL	:=	[255, 0, 0, 255];
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Finding center point via distance transformation
+//	----------------------------------------
+
+//	Steps to do:
+//	 1. Add images to the FileSource1
+//	 2. Set the format of these images to "8-bit Monochrome"
+//	 3. If need be, adjust the parameters fThreshold and bInvert according to your images
+
+eCameraState := fbCameraControl.GetState();
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+	
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+	
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		
+		// Assert image format to be Mono8
+		hr := F_VN_GetImageInfo(ipImageIn, stImageInfo, hr);
+		IF stImageInfo.stPixelFormat.nChannels <> 1 OR stImageInfo.stPixelFormat.nElementSize <> 8 THEN
+			hr := Tc2_System.E_HRESULTAdsErr.INCOMPATIBLE;
+		END_IF
+		
+		// Create RGB result image
+		hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_GRAY_TO_RGB, hr);
+		
+		// Apply threshold to image
+		IF bInvert THEN
+			eThresholdType := TCVN_TT_BINARY_INV;
+		ELSE
+			eThresholdType := TCVN_TT_BINARY;
+		END_IF
+		hr := F_VN_Threshold(ipImageIn, ipImageWork, fThreshold, 255, eThresholdType, hr);
+		
+		// Do Distance transformation and extract center and radius
+		hr := F_VN_DistanceTransformation(
+			ipSrcImage		:=	ipImageWork,
+			ipDestImage		:=	ipImageWork,
+			eDistanceType	:=	eDistanceType,
+			eMaskSize		:=	eMaskSize,
+			hrPrev			:=	hr
+		);
+		hr := F_VN_MaxPixelValue(ipImageWork, aMax, aPos, hr);
+		fRadius := aMax[0];
+		aCenter := aPos;
+
+		// Draw circle into result image
+		hr := F_VN_DrawCircle(
+			nCenterX	:=	TO_UDINT(aCenter[0]), 
+			nCenterY	:=	TO_UDINT(aCenter[1]), 
+			nRadius		:=	TO_UDINT(fRadius), 
+			ipDestImage	:=	ipImageRes, 
+			aColor		:=	aRed, 
+			nThickness	:=	2, 
+			hrPrev		:=	hr	
+		);
+		hr := F_VN_DrawPointExp(TO_UDINT(aCenter[0]), TO_UDINT(aCenter[1]), ipImageRes, TCVN_DS_X, aRed, 10, 2, TCVN_LT_ANTIALIASED, hr);
+				
+		// Convert element type to make distance image visible
+		hr := F_VN_ConvertElementType(ipImageWork, ipImageDist, TCVN_ET_USINT, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageDist, ipImageDistDisp, hr);
+		
+		// Display result images
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+		
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="32" Count="40" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="73" Count="1" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="75" Count="1" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="82" Count="28" />
+      <LineId Id="114" Count="11" />
+      <LineId Id="142" Count="2" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="127" Count="2" />
+      <LineId Id="134" Count="1" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="136" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,178 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{f9765d5b-99df-40bf-9641-8c789664e55c}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	
+	hr						:	HRESULT;
+	
+	fbCamera				:	FB_VN_SimpleCameraControl;
+	eState					:	ETcVnCameraState;
+	
+	ipImageIn				:	ITcVnImage;
+	ipImageInDisp			:	ITcVnDisplayableImage;
+	
+	ipImageWork				:	ITcVnImage;
+	ipImageThresholdDisp	:	ITcVnDisplayableImage;
+	
+	ipImageRes				:	ITcVnImage;
+	ipImageResDisp			:	ITcVnDisplayableImage;
+	
+	
+	// Sample Specific Variables	
+	ipContourList			:	ITcVnContainer;
+	ipContourResultList		:	ITcVnContainer;
+	ipContour				:	ITcVnContainer;
+	ipIterator				:	ITcVnForwardIterator;
+	aOffset					:	TcVnPoint;
+	
+	fThreshold				:	LREAL := 70;
+	
+	fArea					:	LREAL;
+	fAreaMin				:	LREAL := 100;
+	fAreaMax				:	LREAL := 100000;
+	
+	fCircularity			:	LREAL;
+	fCircularityMin			:	LREAL := 0.8;
+		
+	// Image Infos
+	stPixelFormat			:	TcVnPixelFormat;
+	
+	// COLORS
+	aColorGreen				:	TcVnVector4_LREAL	:=	[0, 255, 0];
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Disclaimer
+
+//THIS publication contains statements about the suitability OF our products FOR certain 
+//areas OF application. These statements are based on typical features OF our products. 
+//The examples shown in THIS publication are FOR demonstration purposes only. The 
+//information provided herein should NOT be regarded as specific operation characteristics. 
+//It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//in a particular application. We DO NOT give ANY warranty that the source code which is 
+//made available with this publication is complete or accurate. 
+
+//THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//FITNESS FOR ANY PARTICULAR PURPOSE. 
+
+//THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//FOR the latest version OF our data sheets AND documentations visit our website 
+//(www.beckhoff.de). 
+ 
+//© Beckhoff Automation GmbH & Co. KG, March 2019
+
+//The reproduction, distribution AND utilization OF THIS document as well as the 
+//communication OF its contents TO others without express authorization is prohibited. 
+//Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//event of the grant of a patent, utility model or design.
+
+//-----------------------------------------------------------------------------------------
+
+// SAMPLE - "Blob Detection" by hand with Find Contours
+// ======================================================
+
+// Steps To Do:
+// -------------
+// 1. Add the washer images to the FileSource1
+
+eState := fbCamera.GetState();
+
+CASE eState OF 
+
+TCVN_CS_INITIAL, TCVN_CS_INITIALIZING, TCVN_CS_INITIALIZED, TCVN_CS_OPENING, TCVN_CS_OPENED, TCVN_CS_STARTACQUISITION:
+	hr := fbCamera.StartAcquisition();
+	
+TCVN_CS_ACQUIRING:
+
+	hr := fbCamera.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+
+		// Convert Images into the necessary color space
+		hr := F_VN_GetPixelFormat(ipImageIn, stPixelFormat, hr); 
+		IF stPixelFormat.nChannels = 3 THEN
+			hr := F_VN_CopyImage(ipImageIn, ipImageRes, hr);
+			hr := F_VN_ConvertColorSpace(ipImageRes, ipImageIn, TCVN_CST_RGB_TO_GRAY, hr);
+		ELSE
+			hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_Gray_TO_RGB, hr);
+		END_IF
+		
+		// Image Segementation
+		hr := F_VN_Threshold(ipImageIn, ipImageWork, fThreshold, 255, TCVN_TT_Binary, hr);
+		
+		// Find Contours
+		hr := F_VN_FindContoursExp(
+				ipSrcImage				:= ipImageWork, 
+				ipContours				:= ipContourList, 
+				eRetrievalMode			:= ETcvnContourRetrievalmode.TCVN_CRM_LIST, 
+				eApproximationMethod	:= ETcvnContourApproximationMethod.TCVN_CAM_SIMPLE, 
+				aOffset					:= aOffset, 
+				hrPrev					:= hr);
+				
+		// Filter Contours
+		hr := F_VN_GetForwardIterator(ipContourList, ipIterator, hr);		
+		hr := F_VN_CreateContainer(ipContourResultList, ContainerType_Vector_Vector_TcVnPoint2_DINT, 0, hr);
+		
+		WHILE SUCCEEDED(hr) AND_THEN ipIterator.CheckIfEnd() <> S_OK DO
+			
+			hr := F_VN_GetContainer(ipIterator, ipContour, hr);
+			hr := F_VN_IncrementIterator(ipIterator, hr);
+			
+			// Filter by Area
+			hr := F_VN_ContourArea(ipContour, fArea, hr);
+			
+			IF fArea > fAreaMin AND fArea < fAreaMax THEN
+				
+				// Filter by Circularity
+				hr := F_VN_ContourCircularity(ipContour, fCircularity, hr);
+				
+				IF fCircularity > fCircularityMin THEN
+					
+					// Add contour to the result contour container
+					hr := F_VN_AppendToContainer_ITcVnContainer(ipContour, ipContourResultList, hr);
+					
+				END_IF				
+			END_IF
+		
+		END_WHILE
+		
+		// Display Input Image
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+		
+		// Display Threshold Image
+		hr := F_VN_TransformIntoDisplayableImage(ipImageWork, ipImageThresholdDisp, hr);
+		
+		// Draw contours into the result image and display it
+		hr := F_VN_DrawContours(ipContourResultList, -1, ipImageRes, aColorGreen, 3, hr);		
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+	
+	END_IF
+
+TCVN_CS_ERROR:
+	hr := fbCamera.Reset();
+
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="46" Count="40" />
+      <LineId Id="202" Count="0" />
+      <LineId Id="88" Count="6" />
+      <LineId Id="98" Count="11" />
+      <LineId Id="111" Count="8" />
+      <LineId Id="121" Count="27" />
+      <LineId Id="161" Count="0" />
+      <LineId Id="159" Count="1" />
+      <LineId Id="245" Count="0" />
+      <LineId Id="243" Count="1" />
+      <LineId Id="149" Count="8" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="158" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

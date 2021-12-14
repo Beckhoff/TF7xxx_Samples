@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <DUT Name="CustomTcVnArray4_Point2_DINT" Id="{cb647c9d-9c16-4940-ba03-611ec6213fdf}">
+    <Declaration><![CDATA[TYPE CustomTcVnArray4_Point2_DINT : ARRAY [0..3] OF TcVnPoint2_DINT; END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

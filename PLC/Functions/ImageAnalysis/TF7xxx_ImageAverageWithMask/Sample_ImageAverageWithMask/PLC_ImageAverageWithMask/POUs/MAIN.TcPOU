@@ -1,0 +1,151 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{90f50a3c-0072-4b8e-add9-8f86c5b12777}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	// Parameter to change manually
+	aCenterOffset	:	TcVnPoint			:=	[0, 0]; // Try me!
+	nCircleShrink	:	UDINT				:=	150;	// Try me!
+	
+	// Image acquisition
+	hr				:	HRESULT;
+	ipImageIn		:	ITcVnImage;
+	ipImageInDisp	:	ITcVnDisplayableImage;
+	fbCameraControl	:	FB_VN_SimpleCameraControl;
+	eCameraState	:	ETcVnCameraState;
+	ipImageWork		:	ITcVnImage;
+	
+	// Mask creatoin
+	ipImageMask		:	ITcVnImage;
+	ipImageMaskDisp	:	ITcVnDisplayableImage;
+	nWidth			:	UDINT;
+	nHeight			:	UDINT;
+	aCenter			:	TcVnPoint;
+	nRadius			:	UDINT;
+	aColorBlack		:	TcVnVector4_LREAL	:=	[0, 0, 0, 255];
+	aColorWhite		:	TcVnVector4_LREAL	:=	[255, 255, 255, 255];
+	
+	// Average calculation
+	fAverageInMask	:	LREAL;
+	aAverage		:	TcVnVector4_LREAL;
+	
+	// Result drawing
+	aColorGreen		:	TcVnVector4_LREAL	:=	[0, 255, 0, 255];
+	aColorBlue		:	TcVnVector4_LREAL	:=	[0, 0, 255, 255];
+	ipImageRes		:	ITcVnImage;
+	ipImageResDisp	:	ITcVnDisplayableImage;
+	sText			:	STRING;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Image Statistics in Shape
+//	----------------------------------------
+
+//	Steps to do:
+//	 1. Add images to the FileSource1
+//	 2. Change aCenterOffset and nCircleShrink to test the differnt results
+
+eCameraState := fbCameraControl.GetState();
+
+// CameraControl is in error state, so try to reset the camera connection
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+
+// Camera not yet streaming
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		hr := F_VNx_EnsureGray(ipImageIn, ipImageWork, hr);
+		
+		// Get image information
+		hr := F_VN_GetImageWidth(ipImageWork, nWidth, hr);
+		hr := F_VN_GetImageHeight(ipImageWork, nHeight, hr);
+		
+		// Calculate mask position and size
+		aCenter[0] := TO_DINT(nWidth / 2) + aCenterOffset[0];
+		aCenter[1] := TO_DINT(nHeight / 2) + aCenterOffset[1];
+		nRadius := (MIN(nWidth, nHeight) / 2) - nCircleShrink;
+		
+		// Create mask with correct size and circle in center position
+		hr := F_VN_CreateImageAndSetPixels(ipImageMask, nWidth, nHeight, TCVN_ET_USINT, 1, aColorBlack, hr);
+		hr := F_VN_DrawCircle(
+			nCenterX	:=	TO_UDINT(aCenter[0]),
+			nCenterY	:=	TO_UDINT(aCenter[1]),
+			nRadius		:=	nRadius,
+			ipDestImage	:=	ipImageMask,
+			aColor		:=	aColorWhite,
+			nThickness	:=	-1,
+			hrPrev		:=	hr
+		);
+		
+		// Calculate image average for circle region
+		hr := F_VN_ImageAverageExp(
+			ipSrcImage	:=	ipImageWork,
+			aAverage	:=	aAverage,
+			ipMask		:=	ipImageMask,
+			hrPrev		:=	hr
+		);
+		fAverageInMask := aAverage[0];
+		
+		// Draw results
+		hr := F_VN_ConvertColorSpace(ipImageWork, ipImageRes, TCVN_CST_GRAY_TO_RGB, hr);
+		hr := F_VN_DrawCircle(TO_UDINT(aCenter[0]), TO_UDINT(aCenter[1]), nRadius, ipImageRes, aColorGreen, 5, hr);
+		sText := CONCAT('Average: ', LREAL_TO_FMTSTR(fAverageInMask, 2, TRUE));
+		hr := F_VN_PutTextExp(sText, ipImageRes, 40, 60, TCVN_FT_HERSHEY_SIMPLEX, 2, aColorBlue, 3, TCVN_LT_ANTIALIASED, FALSE, hr);
+		
+		// Displace images
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageMask, ipImageMaskDisp, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="41" Count="34" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="76" Count="13" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="90" Count="13" />
+      <LineId Id="105" Count="28" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="136" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

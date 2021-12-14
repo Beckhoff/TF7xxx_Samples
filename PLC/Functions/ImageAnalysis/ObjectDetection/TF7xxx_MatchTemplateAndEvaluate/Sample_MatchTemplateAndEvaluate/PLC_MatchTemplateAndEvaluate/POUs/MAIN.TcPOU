@@ -1,0 +1,178 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{0299139b-b432-4c74-a9fd-456412d8bef9}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	// Status
+	hr					:	HRESULT;
+	
+	// Threshold for accepting matches
+	fMatchThreshold		:	REAL := 0.9;
+	
+	// Images and state machine
+	ipImageIn			:	ITcVnImage;
+	ipImageInDisp		:	ITcVnDisplayableImage;
+	ipImageIn2			:	ITcVnImage;
+	ipImageRes			:	ITcVnImage;
+	ipImageResDisp		:	ITcVnDisplayableImage;
+	fbCameraControl		:	FB_VN_SimpleCameraControl;
+	eCameraState		:	ETcVnCameraState;
+	
+	// Matching
+	ipMatches			:	ITcVnContainer;
+	ipIterator			:	ITcVnForwardIterator;
+	ipAccess			:	ITcVnAccess_TcVnPoint2_DINT;
+	aPosition			:	TcVnPoint2_DINT;
+	
+	// Drawing
+	nWidth				:	UDINT;
+	nHeight				:	UDINT;
+	aGreen				:	TcVnVector4_LREAL	:=	[0, 255, 0, 255];
+	
+	// Template 
+	ipImageTemplate		:	ITcVnImage;
+	ipImageTemplateDisp	:	ITcVnDisplayableImage;
+	fbCameraControl2	:	FB_VN_SimpleCameraControl;
+	eCameraState2		:	ETcVnCameraState;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Match Template (incl. evaluation)
+//	----------------------------------------
+
+//	Steps to do:
+//	 1. Add images to search in to the FileSource1
+//	 1. Add template image to the FileSource2
+
+
+FileSource_TemplateImage();
+
+eCameraState := fbCameraControl.GetState();
+
+// CameraControl is in error state, so try to reset the camera connection
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+
+// Camera not yet streaming
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		
+		hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_GRAY_TO_RGB, hr);
+		
+		hr := F_VN_MatchTemplateAndEvaluate(ipImageIn, ipImageTemplate, ipMatches, fMatchThreshold, hr);
+		
+		hr := F_VN_GetImageHeight(ipImageTemplate, nHeight, hr);
+		hr := F_VN_GetImageWidth(ipImageTemplate, nWidth, hr);
+		
+		hr := F_VN_GetAt_TcVnPoint2_DINT(ipMatches, aPosition, 0, hr);
+		hr := F_VN_GetForwardIterator(ipMatches, ipIterator, hr);
+		IF SUCCEEDED(hr) AND ipIterator <> 0 THEN
+			hr := ipIterator.TcQueryInterface(IID_ITcVnAccess_TcVnPoint2_DINT, ADR(ipAccess));
+			
+			IF SUCCEEDED(hr) AND ipAccess <> 0 THEN
+				WHILE SUCCEEDED(hr) AND ipIterator.CheckIfEnd() <> S_OK DO
+					hr := ipAccess.Get(aPosition);
+					hr := F_VN_DrawRectangle(
+						DINT_TO_UDINT(aPosition[0]),
+						DINT_TO_UDINT(aPosition[1]),
+						DINT_TO_UDINT(aPosition[0])+nWidth,
+						DINT_TO_UDINT(aPosition[1])+nHeight,
+						ipImageRes,
+						aGreen,
+						5,
+						hr
+					);
+					hr := F_VN_IncrementIterator(ipIterator, hr);
+				END_WHILE
+			END_IF
+		END_IF
+		
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageTemplate, ipImageTemplateDisp, hr);
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <Action Name="FileSource_TemplateImage" Id="{6df3e4e4-4a47-44d5-b306-4ac8acb962cd}">
+      <Implementation>
+        <ST><![CDATA[eCameraState2 := fbCameraControl2.GetState();
+
+// CameraControl is in error state, so try to reset the camera connection
+IF eCameraState2 = TCVN_CS_ERROR THEN
+	hr := fbCameraControl2.Reset();
+
+// Camera not yet streaming
+ELSIF eCameraState2 < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl2.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState2 = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl2.GetCurrentImage(ipImageIn2);
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		
+		FW_SafeRelease(ADR(ipImageTemplate));
+		ipImageTemplate := ipImageIn2;
+		ipImageIn2.TcAddRef();
+		FW_SafeRelease(ADR(ipImageIn2));
+	
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Action>
+    <LineIds Name="MAIN">
+      <LineId Id="42" Count="52" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="95" Count="12" />
+      <LineId Id="132" Count="0" />
+      <LineId Id="108" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MAIN.FileSource_TemplateImage">
+      <LineId Id="2" Count="12" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="17" Count="6" />
+      <LineId Id="1" Count="0" />
+      <LineId Id="24" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

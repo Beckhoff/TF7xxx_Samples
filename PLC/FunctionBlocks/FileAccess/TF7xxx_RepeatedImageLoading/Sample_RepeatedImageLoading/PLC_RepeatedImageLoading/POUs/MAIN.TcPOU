@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{96ef92a5-f5fc-460f-9435-b0bbcc44242e}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr					:	HRESULT;
+	sBasePath			:	STRING(255) := 'C:\TF7xxx_Samples\Images\FunctionBlocks\FileAccess\TF7xxx_RepeatedImageLoading\load\image';
+	sPath				:	STRING(255);
+	nIndex				:	INT := 0;
+	fbReadImage			:	FB_VN_ReadImage;
+	ipImageIn			:	ITcVnImage;
+	ipImageRef			:	ITcVnImage;
+	ipImageRefDisp		:	ITcVnDisplayableImage;
+	nReturnCode			:   UDINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Repeated Image Loading
+//	----------------------------------------
+
+// Steps To Do
+// --------------
+// 1. Adjust the absolute path of the load folder in the sBasePath variable. Note that this paths refer to the selected target system
+// 2. Activate the Configuration -> Start TwinCAT System to run -> Login PLC -> Start PLC
+// 3. Move the images in order (starting from index=0) to the load folder and watch the result in the ADS Image Watch
+
+hr := S_OK;
+
+sPath := CONCAT(CONCAT(sBasePath, TO_STRING(nIndex)), '.png');
+
+fbReadImage(
+	sFilePath:= sPath, 
+	ipDestImage:= ipImageIn, 
+	bRead:= TRUE, 
+	nTimeout:= T#1S);
+
+IF NOT fbReadImage.bBusy THEN
+	IF NOT fbReadImage.bError THEN
+		nReturnCode := 0;
+		nIndex := nIndex + 1;
+		
+		IF ipImageIn <> 0 THEN
+			FW_SafeRelease(ADR(ipImageRef));
+			ipImageRef := ipImageIn;
+			ipImageIn.TcAddRef();
+			FW_SafeRelease(ADR(ipImageIn));
+		END_IF
+	ELSE
+		nReturnCode := fbReadImage.nErrorId AND 16#FFF;
+	END_IF
+	fbReadImage(sFilePath:='', bRead:=FALSE);
+END_IF
+
+hr := F_VN_TransformIntoDisplayableImage(ipImageRef, ipImageRefDisp, hr);
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="42" Count="36" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="7" Count="8" />
+      <LineId Id="17" Count="2" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="21" Count="3" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="26" Count="2" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

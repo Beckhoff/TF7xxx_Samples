@@ -1,0 +1,163 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{00327958-bd0d-4bed-a20f-2f36681233a1}" SpecialFunc="None">
+    <Declaration><![CDATA[
+PROGRAM MAIN
+VAR
+	hr					:	HRESULT;
+	hrFunc				:	HRESULT;
+
+	fbCamera			:	FB_VN_SimpleCameraControl;
+	eState				:	ETcVnCameraState;
+	
+	ipImageIn			: 	ITcVnImage;
+	ipImageInDisp		: 	ITcVnDisplayableImage;
+	
+	ipImageRes			: 	ITcVnImage;
+	ipImageResDisp		:	ITcVnDisplayableImage;
+	
+	// Blob Detection
+	stBlobParams		:	TcVnParamsBlobDetection;
+	ipContourList		:	ITcVnContainer;
+	
+	// Watchdog
+	hrWD				:	HRESULT;
+	tStop				:	DINT := 5000;
+	tRest				:	DINT;
+	nFraction			:	UDINT;
+	
+	// Output
+	sText				:	STRING(255);
+	
+	// Color
+	aColorGreen			:	TcVnVector4_LREAL := [0, 255, 0, 0];
+	
+	// Image Infos
+	stPixelFormat		:	TcVnPixelFormat;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+  	
+//	-----------------------------------------------------------------------------------------
+
+//	SAMPLE - DECTECT BLOBS MONITORED BY A WATCHDOG
+//	================================================
+  	
+//	Steps To Do:
+//	------------
+//	1. Add the washer images to the FileSource1
+//	2. Try out different watchdog times
+
+
+eState := fbCamera.GetState();
+
+CASE eState OF
+	
+TCVN_CS_INITIAL, TCVN_CS_INITIALIZING, TCVN_CS_INITIALIZED, TCVN_CS_OPENING, TCVN_CS_OPENED, TCVN_CS_STARTACQUISITION:
+	hr := fbCamera.StartAcquisition();
+	
+TCVN_CS_ACQUIRING:
+	
+	hr := fbCamera.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND_THEN ipImageIn <> 0 THEN
+			
+		// Convert Images into the necessary color space
+		hr := F_VN_GetPixelFormat(ipImageIn, stPixelFormat, hr); 
+		IF stPixelFormat.nChannels = 3 THEN
+			hr := F_VN_CopyImage(ipImageIn, ipImageRes, hr);
+			hr := F_VN_ConvertColorSpace(ipImageRes, ipImageIn, TCVN_CST_RGB_TO_GRAY, hr);
+		ELSE
+			hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_Gray_TO_RGB, hr);
+		END_IF
+		
+		// Set Parameters
+		// --------------------------------------------------------------
+		// - Set fMaxArea to 100000 detect all circles or set it to 10000  
+		//   to detect only the small circles
+		stBlobParams.bFilterByArea			:=	TRUE;
+		stBlobParams.fMinArea				:=	100;
+		stBlobParams.fMaxArea				:=	100000;
+		stBlobParams.bFilterByCircularity	:=	TRUE;
+		stBlobParams.fMinCircularity		:=	0.80;
+		stBlobParams.fMinThreshold			:=	70;
+		stBlobParams.fThresholdStep			:=	0;
+		
+		// Execute DetectBlobs-Function monitored by Watchdog-Function
+		// --------------------------------------------------------------
+		// Try out different watchdog times
+		hrWD := F_VN_StartRelWatchdog(tStop, S_OK); 
+			hrFunc := F_VN_DetectBlobs(
+									ipSrcImage		:= ipImageIn, 
+									ipBlobContours	:= ipContourList, 
+									stParams		:= stBlobParams, 
+									hrPrev			:= hr);
+		hrWD := F_VN_StopWatchdog(hrWD, tRest => tRest, nFractionProcessed => nFraction);
+		
+		// Draw result for visualization
+		// --------------------------------------------------------------
+		hr := F_VN_DrawContours(ipContourList, -1, ipImageRes, aColorGreen, 3, hr);
+		
+		sText := CONCAT(CONCAT('Processed ', UDINT_TO_STRING(nFraction)), '%');
+		hr := F_VN_PutTextExp(sText, ipImageRes, 25, 50, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorGreen, 2, TCVN_LT_8_CONNECTED, FALSE, hr);
+
+		sText := CONCAT(CONCAT('Time ', DINT_TO_STRING(tStop - tRest)), 'us');
+		hr := F_VN_PutTextExp(sText, ipImageRes, 25, 100, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorGreen, 2, TCVN_LT_8_CONNECTED, FALSE,hr);
+
+		sText := CONCAT('Returncode ', DINT_TO_STRING(hrFunc));
+		hr := F_VN_PutTextExp(sText, ipImageRes, 25, 150, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorGreen, 2, TCVN_LT_8_CONNECTED, FALSE,hr);
+				
+		// Display Input Image
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+		
+		// Display Result Image
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+		
+	END_IF
+	
+TCVN_CS_ERROR:
+	hr := fbCamera.Reset();
+
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="40" Count="42" />
+      <LineId Id="186" Count="0" />
+      <LineId Id="84" Count="7" />
+      <LineId Id="95" Count="44" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="149" Count="1" />
+      <LineId Id="140" Count="7" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="148" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

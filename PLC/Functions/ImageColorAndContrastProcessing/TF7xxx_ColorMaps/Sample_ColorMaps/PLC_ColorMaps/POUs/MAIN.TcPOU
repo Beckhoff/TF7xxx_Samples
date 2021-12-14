@@ -1,0 +1,137 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{b9a2719a-3a23-4b06-8dbf-2271d88d00bc}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR CONSTANT
+	N_COLORS			:	ULINT := 3;						//	-> # of colors in custom gradient 
+END_VAR
+VAR
+	aColors				:	ARRAY [0..(N_COLORS-1)] OF TcVnVector3_REAL := [[255, 0, 0], [0, 255, 0], [0, 0, 255]];	//	-> colors in custom gradient
+	eColorMap			:	ETcVnColorMap := TCVN_CM_JET;	//	-> predefined color gradient
+	bUseCustomColors	:	BOOL;							//	-> use custom (TRUE) or predefined (FALSE) color gradients
+	
+	eColorMapSize		:	ETcVnColorMapSize;
+	ipColors			:	ITcVnContainer;
+	ipColorMap			:	ITcVnContainer;
+	
+	hr					:	HRESULT;
+	fbCameraControl		:	FB_VN_SimpleCameraControl;
+	eCameraState		:	ETcVnCameraState;
+	stImageInfo			:	TcVnImageInfo;
+	ipImageIn			:	ITcVnImage;
+	ipImageInDisp		:	ITcVnDisplayableImage;
+	ipImageRes			:	ITcVnImage;
+	ipImageResDisp		:	ITcVnDisplayableImage;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Use color maps
+//	----------------------------------------
+
+//	Steps to do:
+//	 1. Start the PLC
+//	 2. Adjust the parameters bUseCustomColorMap, eColorMapType and aColors as you like
+
+// Standard state machine
+eCameraState := fbCameraControl.GetState();
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+	
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+	
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+
+		// Input validation and parameter adjustments
+		hr := F_VN_GetImageInfo(ipImageIn, stImageInfo, hr);
+		IF stImageInfo.stPixelFormat.nChannels <> 1 THEN
+			// Abort, because image is not mono
+			hr := Tc2_System.E_HRESULTAdsErr.ABORTED;
+		ELSIF stImageInfo.stPixelFormat.nElementSize = 8 THEN
+			eColorMapSize := TCVN_CMS_256;
+		ELSIF stImageInfo.stPixelFormat.nElementSize = 16 THEN
+			eColorMapSize := TCVN_CMS_65536;
+		ELSE
+			// Abort, because image is neither 8-bit nor 16-bit
+			hr := Tc2_System.E_HRESULTAdsErr.ABORTED;
+		END_IF
+		
+		// Generate a color map either by preset or by custom-defined colors
+		IF bUseCustomColors THEN
+			hr := F_VN_CreateContainerFromArray(ADR(aColors), ipColors, ContainerType_Vector_TcVnVector3_REAL, N_COLORS, hr);
+			hr := F_VN_GenerateCustomColorMap(
+				ipColorMap		:=	ipColorMap,
+				ipInitialColors	:=	ipColors,
+				eColorMapSize	:=	eColorMapSize,
+				hrPrev			:=	hr
+			);
+		ELSE
+			hr := F_VN_GenerateColorMap(
+				ipColorMap		:=	ipColorMap,
+				eColorMap		:=	eColorMap,
+				eColorMapSize	:=	eColorMapSize,
+				hrPrev			:=	hr
+			);
+		END_IF
+		
+		// Apply color map to image
+		hr := F_VN_ApplyColorMap(
+			ipSrcImage		:=	ipImageIn,
+			ipDestImage		:=	ipImageRes,
+			ipColorMap		:=	ipColorMap,
+			hrPrev			:=	hr
+		);
+		
+		// Display results
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+		
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="30" Count="40" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="71" Count="1" />
+      <LineId Id="127" Count="0" />
+      <LineId Id="73" Count="1" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="75" Count="47" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

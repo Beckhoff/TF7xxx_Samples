@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="FB_ConditionMoreThanFive" Id="{ba18a29d-0000-4bc7-b79a-75246b9e15fc}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'c++_compatible'}
+FUNCTION_BLOCK FB_ConditionMoreThanFive IMPLEMENTS ITcVnCustomElementCondition_ITcVnContainer
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Condition" Id="{2eb2806b-612b-4868-8e00-1de8edaf61bc}">
+      <Declaration><![CDATA[{attribute 'c++_compatible'}
+{attribute 'minimal_input_size' := '4'}
+{attribute 'pack_mode' := '4'}
+(* Evaluates the condition for the container. *)
+METHOD Condition : BOOL
+VAR_INPUT
+	ipElement			:	ITcVnContainer;
+END_VAR
+VAR
+	nNumberOfElements	:	ULINT;
+	hr					:	HRESULT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[hr := F_VN_GetNumberOfElements(ipElement, nNumberOfElements, hr);
+IF FAILED(hr) OR nNumberOfElements <= 5 THEN
+	Condition := FALSE;
+ELSE
+	Condition := TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_ConditionMoreThanFive">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ConditionMoreThanFive.Condition">
+      <LineId Id="11" Count="0" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="31" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

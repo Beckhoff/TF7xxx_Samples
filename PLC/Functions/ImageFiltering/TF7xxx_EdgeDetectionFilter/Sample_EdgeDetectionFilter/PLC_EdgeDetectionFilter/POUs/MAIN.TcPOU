@@ -1,0 +1,168 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{8c2079a1-ef12-4195-ae90-6c6a7182ce94}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr				:	HRESULT;
+	ipImageIn			:	ITcVnImage;
+	ipImageInDisp	:	ITcVnDisplayableImage;
+	fbCameraControl	:	FB_VN_SimpleCameraControl;
+	eCameraState	:	ETcVnCameraState;
+	
+	// Sobel
+	ipImageSobel		:	ITcVnImage;
+	ipImageSobelDisp	:	ITcVnDisplayableImage;
+	eSobel_DestDepth	:	ETcVnElementType	:=	TCVN_ET_USINT;
+	aSobel_DerivOrder	:	ARRAY [0..1] OF UDINT	:= [1, 1];
+	nSobel_KernelSize	:	UDINT	:=	3;
+	fSobel_Scale		:	LREAL	:=	10;
+	fSobel_Delta		:	LREAL	:=	0;
+	eSobel_BorderExtra	:	ETcVnBorderInterpolationMethod	:=	TCVN_BIM_DEFAULT;
+	
+	// Scharr
+	ipImageScharr		:	ITcVnImage;
+	ipImageScharrDisp	:	ITcVnDisplayableImage;
+	eScharr_DestDepth	:	ETcVnElementType	:=	TCVN_ET_USINT;
+	eScharr_FilterDir	:	ETcVnFilterDirection	:=	TCVN_FD_X;
+	fScharr_Scale		:	LREAL	:=	1;
+	fScharr_Delta		:	LREAL	:=	0;
+	eScharr_BorderExtra	:	ETcVnBorderInterpolationMethod	:=	TCVN_BIM_DEFAULT;
+	
+	// Laplace
+	ipImageLaplace		:	ITcVnImage;
+	ipImageLaplaceDisp	:	ITcVnDisplayableImage;
+	eLaplace_DestDepth	:	ETcVnElementType	:=	TCVN_ET_USINT;
+	nLaplace_KernelSize	:	UDINT	:=	3;
+	fLaplace_Scale		:	LREAL	:=	10;
+	fLaplace_Delta		:	LREAL	:=	0;
+	eLaplace_BorderExtra:	ETcVnBorderInterpolationMethod	:=	TCVN_BIM_DEFAULT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Edge Detection Filter
+//	----------------------------------------
+
+//	Steps to do:
+//	 1. Add images to the FileSource1
+
+eCameraState := fbCameraControl.GetState();
+
+// CameraControl is in error state, so try to reset the camera connection
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+
+// Camera not yet streaming
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+
+		// Execute the Sobel Filter 
+		// -------------------------------------------------------------------------				
+		hr := F_VN_SobelFilterExp(
+			ipSrcImage  :=  ipImageIn,
+			ipDestImage :=  ipImageSobel,
+			eDestDepth  :=  eSobel_DestDepth,
+			nXOrder     :=  aSobel_DerivOrder[0],
+			nYOrder     :=  aSobel_DerivOrder[1],
+			nKernelSize :=  nSobel_KernelSize,
+			fScale      :=  fSobel_Scale,
+			fDelta      :=  fSobel_Delta,
+			eBorderType :=  eSobel_BorderExtra,
+			hrPrev      :=  hr);
+			
+		hr := F_VN_TransformIntoDisplayableImage(ipImageSobel, ipImageSobelDisp, hr);
+		
+		// Execute the Scharr Filter 
+		// -------------------------------------------------------------------------
+		hr := F_VN_ScharrFilterExp(
+			ipSrcImage      :=  ipImageIn,
+			ipDestImage     :=  ipImageScharr,
+			eDestDepth      :=  eScharr_DestDepth,
+			eFilterDirection:=  eScharr_FilterDir,
+			fScale          :=  fScharr_Scale,
+			fDelta          :=  fScharr_Delta,
+			eBorderType     :=  eScharr_BorderExtra,
+			hrPrev          :=  hr);
+			
+		hr := F_VN_TransformIntoDisplayableImage(ipImageScharr, ipImageScharrDisp, hr);
+	    
+		// Execute the Laplacian Filter 
+		// -------------------------------------------------------------------------
+		hr := F_VN_LaplacianFilterExp(
+			ipSrcImage  :=  ipImageIn,
+			ipDestImage :=  ipImageLaplace,
+			eDestDepth  :=  eLaplace_DestDepth,
+			nKernelSize :=  nLaplace_KernelSize,
+			fScale      :=  fLaplace_Scale,
+			fDelta      :=  fLaplace_Delta,
+			eBorderType :=  eLaplace_BorderExtra,
+			hrPrev      :=  hr);
+			
+		hr := F_VN_TransformIntoDisplayableImage(ipImageLaplace, ipImageLaplaceDisp, hr);
+		
+		// Display Input Image
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="42" Count="35" />
+      <LineId Id="79" Count="13" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="145" Count="1" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="96" Count="10" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="147" Count="1" />
+      <LineId Id="109" Count="9" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="149" Count="1" />
+      <LineId Id="121" Count="9" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="132" Count="1" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="134" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,176 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{c7824007-caa5-4833-a260-a399317c2c6e}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr						:	HRESULT;
+
+	fbCamera				:	FB_VN_SimpleCameraControl;
+	eState					:	ETcVnCameraState;
+	
+	ipImageIn				: 	ITcVnImage;
+	ipImageInDisp			: 	ITcVnDisplayableImage;
+	
+	ipImageRes				: 	ITcVnImage;
+	ipImageResDisp			:	ITcVnDisplayableImage;
+
+	ipImageHierarchy		:	ITcVnImage;
+	ipImageHierarchyDisp	:	ITcVnDisplayableImage;
+	
+	// Sample Specific Variables
+	ipContourList			:	ITcVnContainer;
+	ipContour				:	ITcVnContainer;
+	ipHierarchyList			:	ITcVnContainer;
+	aHierarchy				:	TcVnVector4_DINT;
+	aHierarchyTree			:	TcVnVector4_DINT;
+	eRetrievalMode			:	ETcVnContourRetrievalMode := TCVN_CRM_LIST;
+	eApproximationMethod	:	ETcVnContourApproximationMethod := TCVN_CAM_SIMPLE;
+	aOffset					:	TcVnPoint;
+	
+	nNumOfElem		:	ULINT;
+	nParents		:	UINT;
+	i				: 	ULINT;
+	j				:	ULINT;
+	stRect			:	TcVnRectangle_UDINT;
+	sText			:	STRING(80);
+	
+	// Colors	
+	aColorWhite		:	TcVnVector4_LREAL := [255, 255, 255];
+	aColorBlack		:	TcVnVector4_LREAL := [0, 0, 0];
+	aColorList		:	ARRAY[0..4] OF TcVnVector4_LREAL := [ [255,0,0], [0,255,0], [0,0,255], [200,200,0], [200,0,200]];
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+  	
+//	-----------------------------------------------------------------------------------------
+
+//	SAMPLE - FIND CONTOURS AND THEIR HIERARCHY
+//	============================================
+  	
+//	Steps To Do
+//	-------------
+//	1. Add the two images to the file source control
+//	2. In Run Mode: 
+// 			Change the Contour Retrieval Mode (eRetrievalMode)
+//			with write value and find out the differents 
+//			between the modes
+
+eState := fbCamera.GetState();
+
+CASE eState OF
+	
+TCVN_CS_INITIAL, TCVN_CS_INITIALIZING, TCVN_CS_INITIALIZED, TCVN_CS_OPENING, TCVN_CS_OPENED, TCVN_CS_STARTACQUISITION:
+	hr := fbCamera.StartAcquisition();
+	
+TCVN_CS_ACQUIRING:
+	
+	hr := fbCamera.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND_THEN ipImageIn <> 0 AND eRetrievalMode <> TCVN_CRM_FLOODFILL THEN
+		
+		// Create Result Image
+		hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_Gray_TO_RGB, hr);
+		hr := F_VN_CreateImage(ipImageHierarchy, 130, 200, EtcVnElementType.TCVN_ET_USINT, 3, hr);
+		hr := F_VN_SetPixels(ipImageHierarchy, aColorWhite, hr);
+		
+		// Find Contours and their Hierarchy
+		// -----------------------------------
+		hr := F_VN_FindContourHierarchyExp(
+											ipSrcImage				:=	ipImageIn, 
+											ipContours				:=	ipContourList, 
+											ipHierarchy				:=	ipHierarchyList, 
+											eRetrievalMode			:=	eRetrievalMode, 
+											eApproximationMethod	:=	eApproximationMethod, 
+											aOffset					:=	aOffset, 
+											hrPrev					:=	hr);
+		
+		hr := F_VN_GetNumberOfElements(ipContourList, nNumOfElem, hr);
+		
+		IF nNumOfElem > 0 THEN
+			FOR i:= 0 TO (nNumOfElem-1) BY 1 DO
+				
+				hr := F_VN_GetAt_ITcVnContainer(ipContourList, ipContour, i, hr);
+				hr := F_VN_GetAt_TcVnVector4_DINT(ipHierarchyList, aHierarchy, i, hr);
+				
+				// Count Parents and set aColor depending on parent number
+				nParents := 0;
+				aHierarchyTree := aHierarchy;	
+				WHILE SUCCEEDED(hr) AND_THEN aHierarchyTree[3] >= 0 DO
+					nParents := nParents + 1;
+					hr := F_VN_GetAt_TcVnVector4_DINT(ipHierarchyList, aHierarchyTree, TO_ULINT(aHierarchyTree[3]), hr);
+				END_WHILE
+				
+				// Draw contour and number into the result image
+				sText := TO_STRING(i);
+				hr := F_VN_UprightBoundingRectangle(ipContour, stRect, hr);
+				hr := F_VN_PutText(	sText, ipImageRes, stRect.nX +10, stRect.nY +15, TCVN_FT_HERSHEY_PLAIN, 1,  aColorList[(nParents) MOD 4], hr);				
+				hr := F_VN_DrawContours(ipContour, -1, ipImageRes, aColorList[(nParents) MOD 4], 2, hr);
+				
+				// Write Hierarchy 	
+				hr := F_VN_PutText(	sText, ipImageHierarchy, 10, TO_UDINT(10 + i*10),  TCVN_FT_HERSHEY_PLAIN,  0.5, aColorList[(nParents) MOD 4], hr);	
+				FOR j := 0 TO 3 BY 1 DO
+					sText := TO_STRING(aHierarchy[j]);
+					hr := F_VN_PutText(	sText, ipImageHierarchy, TO_UDINT(10 + (j+1)*22), TO_UDINT(10 + i*10),  TCVN_FT_HERSHEY_PLAIN,  0.5, aColorBlack, hr);
+				END_FOR
+			END_FOR
+		END_IF
+		
+		// Display Input Image
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);											
+		
+		// Display Results			
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageHierarchy, ipImageHierarchyDisp, hr);
+		
+	END_IF
+	
+TCVN_CS_ERROR:
+	hr := fbCamera.Reset();
+
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="45" Count="44" />
+      <LineId Id="202" Count="0" />
+      <LineId Id="91" Count="7" />
+      <LineId Id="102" Count="36" />
+      <LineId Id="140" Count="6" />
+      <LineId Id="148" Count="1" />
+      <LineId Id="162" Count="0" />
+      <LineId Id="161" Count="0" />
+      <LineId Id="150" Count="1" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="152" Count="7" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="160" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

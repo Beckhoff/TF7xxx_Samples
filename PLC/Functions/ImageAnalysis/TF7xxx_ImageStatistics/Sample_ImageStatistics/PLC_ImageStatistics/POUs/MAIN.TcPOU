@@ -1,0 +1,187 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{2ce6f49e-0223-42b5-b82a-785daa985d57}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr				:	HRESULT;
+	ipImageIn		:	ITcVnImage;
+	ipImageInDisp	:	ITcVnDisplayableImage;
+	ipImageRes		:	ITcVnImage;
+	ipImageResDisp	:	ITcVnDisplayableImage;
+	fbCameraControl	:	FB_VN_SimpleCameraControl;
+	eCameraState	:	ETcVnCameraState;
+	stImageInfo		:	TcVnImageInfo;
+	
+	aMin			:	TcVnVector4_LREAL;
+	aMax			:	TcVnVector4_LREAL;
+	aMedian			:	TcVnVector4_LREAL;
+	aAverage		:	TcVnVector4_LREAL;
+	aStdDev			:	TcVnVector4_LREAL;
+	
+	aPos			:	TcVnPoint2_DINT;
+	sText			:	STRING;
+	
+	nTextX			:	UDINT	:=	10;
+	nTextYBase		:	UDINT	:=	50;
+	nTextYIncrement	:	UDINT	:=	50;
+	fFontScale		:	LREAL	:=	2;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: Image Statistics
+//	----------------------------------------
+
+//	Steps to do:
+//	 1. Add images to the FileSource1
+
+eCameraState := fbCameraControl.GetState();
+
+// CameraControl is in error state, so try to reset the camera connection
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+
+// Camera not yet streaming
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		
+		// Input validation and prepare images
+		hr := F_VN_GetImageInfo(ipImageIn, stImageInfo, hr);
+		IF stImageInfo.stPixelFormat.nChannels = 1 THEN
+			; // right type, no conversion needed 
+		ELSIF stImageInfo.stPixelFormat.nChannels = 3 THEN
+			hr := F_VN_ConvertColorSpace(ipImageIn, ipImageIn, TCVN_CST_RGB_TO_GRAY, hr);
+		ELSIF stImageInfo.stPixelFormat.nChannels = 4 THEN
+			hr := F_VN_ConvertColorSpace(ipImageIn, ipImageIn, TCVN_CST_RGBA_TO_GRAY, hr);
+		ELSE
+			hr := Tc2_System.E_HRESULTAdsErr.INCOMPATIBLE;
+		END_IF
+		
+		hr := F_VN_CopyImage(ipImageIn, ipImageRes, hr);
+		
+		// Calculate image statistics
+		hr := F_VN_MinPixelValue(
+			ipImage		:=	ipImageIn,
+			aMinValue	:=	aMin,
+			aPosition	:=	aPos,
+			hrPrev		:=	hr);
+			
+		hr := F_VN_MaxPixelValue(
+			ipImage		:=	ipImageIn,
+			aMaxValue	:=	aMax,
+			aPosition	:=	aPos,
+			hrPrev		:=	hr);
+			
+		hr := F_VN_ImageMedian(
+			ipSrcImage	:=	ipImageIn,
+			aMedian		:=	aMedian,
+			hrPrev		:=	hr);
+			
+		hr := F_VN_ImageAverageStdDev(
+			ipSrcImage	:=	ipImageIn,
+			aAverage	:=	aAverage,
+			aStdDev		:=	aStdDev,
+			hrPrev		:=	hr);
+		
+		// Adjust font scale depending on image width
+		IF stImageInfo.nWidth <= 500 THEN
+			fFontScale := 1;
+			nTextYIncrement := 25;
+		ELSIF stImageInfo.nWidth <= 800 THEN
+			fFontScale := 2;
+			nTextYIncrement := 50;
+		ELSE
+			fFontScale := 3;
+			nTextYIncrement := 75;
+		END_IF
+		
+		// Draw results
+		sText := CONCAT('Min: ', LREAL_TO_FMTSTR(aMin[0], 2, TRUE ));
+		hr := F_VN_PutLabel(sText, ipImageRes, nTextX, (nTextYBase + (1 * nTextYIncrement)), fFontScale, hr);
+		sText := CONCAT('Max: ', LREAL_TO_FMTSTR(aMax[0], 2, TRUE ));
+		hr := F_VN_PutLabel(sText, ipImageRes, nTextX, (nTextYBase + (2 * nTextYIncrement)), fFontScale, hr);
+		sText := CONCAT('Median: ', LREAL_TO_FMTSTR(aMedian[0], 2, TRUE ));
+		hr := F_VN_PutLabel(sText, ipImageRes, nTextX, (nTextYBase + (3 * nTextYIncrement)), fFontScale, hr);
+		sText := CONCAT('Average: ', LREAL_TO_FMTSTR(aAverage[0], 2, TRUE ));
+		hr := F_VN_PutLabel(sText, ipImageRes, nTextX, (nTextYBase + (4 * nTextYIncrement)), fFontScale, hr);
+		sText := CONCAT('StdDev: ', LREAL_TO_FMTSTR(aStdDev[0], 2, TRUE ));
+		hr := F_VN_PutLabel(sText, ipImageRes, nTextX, (nTextYBase + (5 * nTextYIncrement)), fFontScale, hr);
+		
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="30" Count="48" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="79" Count="1" />
+      <LineId Id="155" Count="1" />
+      <LineId Id="154" Count="0" />
+      <LineId Id="160" Count="1" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="172" Count="0" />
+      <LineId Id="163" Count="1" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="174" Count="1" />
+      <LineId Id="84" Count="6" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="92" Count="4" />
+      <LineId Id="152" Count="0" />
+      <LineId Id="98" Count="3" />
+      <LineId Id="153" Count="0" />
+      <LineId Id="103" Count="4" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="190" Count="0" />
+      <LineId Id="176" Count="1" />
+      <LineId Id="186" Count="0" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="182" Count="0" />
+      <LineId Id="187" Count="0" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="185" Count="0" />
+      <LineId Id="188" Count="0" />
+      <LineId Id="178" Count="0" />
+      <LineId Id="189" Count="0" />
+      <LineId Id="110" Count="13" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

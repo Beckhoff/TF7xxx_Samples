@@ -1,0 +1,133 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{3275e8fe-3b44-4231-934c-b51b582a820e}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr					:	HRESULT;
+	fbCameraControl		:	FB_VN_SimpleCameraControl;
+	eCameraState		:	ETcVnCameraState;
+	ipImageIn			:	ITcVnImage;
+	ipImageInDisp		:	ITcVnDisplayableImage;
+
+	// Sample specific Variables
+	bTriggerReadValue	:	BOOL;
+	nReadValue			:	UDINT;
+	fbReadValue			:	FB_VN_ReadRegister_UDINT;
+	nReturnCodeRead		:	UDINT;
+	
+	bTriggerWriteValue	:	BOOL;
+	nWriteValue			:	UDINT := 5000;
+	fbWriteValue		:	FB_VN_WriteRegister_UDINT;
+	nReturnCodeWrite	:	UDINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+// SAMPLE - READ / WRITE CAMERA REGISTER
+// =====================================
+ 
+// Steps To Do
+// --------------
+// 1. Add a camera to the solution
+// 2. Initialize fbCamera, fbReadValue and fbWriteValue
+// 3. Add the Adress of the Camera Parameter to the Function Blocks
+// 4. Add the Endianess of the Camera Parameter to the Function Blocks
+// 5. Check the Register Value Property of the Camera Parmater for the right Input Format of nWriteValue
+
+// Get camera state
+eCameraState := fbCameraControl.GetState();
+
+// CameraControl is in error state, so try to reset the camera connection
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+
+// Camera not yet streaming
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.GetCurrentImage(ipImageIn);
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN			
+		hr := F_VN_TransformIntoDisplayableImage(ipSrcImage:= ipImageIn, ipDestImage:= ipImageInDisp, hrPrev:= hr);
+	END_IF
+END_IF
+
+// Read a Camera Parameter 
+// -------------------------------------------------------------------------------------------
+IF eCameraState >= TCVN_CS_OPENED THEN
+	fbReadValue(
+		nAddress	:=	16#20004BFC, 		// Check the Address of the Camera Parameter
+		nEndian		:=	1,					// 0 = Big, 1 = Little
+		bRead		:=	bTriggerReadValue, 
+		nTimeout	:=	T#5S, 
+		nValue		=>	nReadValue);
+		
+	IF bTriggerReadValue AND NOT fbReadValue.bBusy THEN
+		// Check if fbWriteImage was finished successfully or implement error handling
+		IF fbReadValue.bError THEN
+			nReturnCodeRead := fbReadValue.nErrorId AND 16#FFF;
+		ELSE
+			nReturnCodeRead := 0;
+		END_IF
+		bTriggerReadValue := FALSE;
+	END_IF
+END_IF
+
+// Write a Camera Parameter
+// -------------------------------------------------------------------------------------------
+IF eCameraState >= TCVN_CS_OPENED THEN
+	fbWriteValue(
+		nAddress	:=	16#20004BFC, 		// Check the Address of the Camera Parameter
+		nValue		:=	nWriteValue, 		// Check the right Input Format 
+		nEndian		:=	1,					// 0 = Big, 1 = Little
+		bWrite		:=	bTriggerWriteValue, 
+		nTimeout	:=	T#5S);
+	
+	IF bTriggerWriteValue AND NOT fbWriteValue.bBusy THEN
+		// Check if fbWriteImage was finished successfully or implement error handling
+		IF fbWriteValue.bError THEN
+			nReturnCodeWrite := fbWriteValue.nErrorId AND 16#FFF;
+		ELSE
+			nReturnCodeWrite := 0;
+		END_IF
+		bTriggerWriteValue := FALSE;
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="24" Count="101" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

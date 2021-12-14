@@ -1,0 +1,92 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{a368ebfd-7eb0-4d33-bc57-104365297b24}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr             		:   HRESULT;
+    fbCamera       		:   FB_VN_SimpleCameraControl;
+    eState         		:   ETcVnCameraState;
+    ipImageIn      		:   ITcVnImage;
+    ipImageInDisp  		:   ITcVnDisplayableImage;
+	nNewImageCounter 	:	UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, July 2019
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	Sample: First Steps
+//	----------------------------------------
+
+//	Steps to do:
+// 1. Add the sample images to the FileSource1 Control
+// 2. Activate the Configuration -> Start TwinCAT System to run -> Login PLC -> Start PLC
+// 3. Open TwinCAT > Windows > ADS Image Watch and select the ipImageInDisp to take a look at the images 
+
+eState := fbCamera.GetState();
+
+IF eState = TCVN_CS_ERROR THEN
+    hr := fbCamera.Reset();
+
+ELSIF eState < TCVN_CS_ACQUIRING THEN
+    hr := fbCamera.StartAcquisition();
+
+ELSIF eState = TCVN_CS_ACQUIRING THEN
+    hr := fbCamera.GetCurrentImage(ipImageIn);
+	
+	// Check if new Image was received
+    IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+        nNewImageCounter := nNewImageCounter + 1;
+		
+        // Place to call vision algorithms
+        hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, hr);
+    END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="32" Count="33" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="11" Count="9" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="25" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

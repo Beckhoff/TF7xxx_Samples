@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="F_VNx_EnsureGray" Id="{f7bc7c63-ceb2-4499-bbd6-e2f9b9ba07f0}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_VNx_EnsureGray : HRESULT
+VAR_INPUT
+	ipSrcImage		:	ITcVnImage;
+	ipDestImage		:	REFERENCE TO ITcVnImage;
+	hrPrev			:	HRESULT;
+END_VAR
+VAR
+	hr				:	HRESULT;
+	stFormat		:	TcVnPixelFormat;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Check params
+IF FAILED(hrPrev) THEN
+	F_VNx_EnsureGray := hrPrev;
+	RETURN;
+END_IF
+
+IF ipSrcImage = 0 THEN
+	F_VNx_EnsureGray := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+	RETURN;
+END_IF
+
+// Processing
+hr := F_VN_GetPixelFormat(ipSrcImage, stFormat, hr);
+
+CASE stFormat.nChannels OF
+1:
+	// To get 2 independent images a copy is necessary in this case
+	hr := F_VN_CopyImage(ipSrcImage, ipDestImage, hr);
+3:
+	hr := F_VN_ConvertColorSpace(ipSrcImage, ipDestImage, TCVN_CST_RGB_TO_GRAY, hr);
+4:
+	hr := F_VN_ConvertColorSpace(ipSrcImage, ipDestImage, TCVN_CST_RGBA_TO_GRAY, hr);
+ELSE
+	hr := Tc2_System.E_HRESULTAdsErr.INCOMPATIBLE;
+END_CASE
+
+// Return
+F_VNx_EnsureGray := hr;
+RETURN;
+]]></ST>
+    </Implementation>
+    <LineIds Name="F_VNx_EnsureGray">
+      <LineId Id="58" Count="9" />
+      <LineId Id="72" Count="5" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="78" Count="7" />
+      <LineId Id="89" Count="3" />
+      <LineId Id="47" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

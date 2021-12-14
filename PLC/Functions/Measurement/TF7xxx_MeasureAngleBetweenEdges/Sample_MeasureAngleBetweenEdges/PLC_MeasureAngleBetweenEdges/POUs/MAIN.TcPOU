@@ -1,0 +1,166 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="MAIN" Id="{9c87b4a5-ef6c-45ea-b999-9810b40e093f}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr 				: HRESULT;
+	hrFunc			: HRESULT;
+	
+	fbCamera		: FB_VN_SimpleCameraControl;
+	eState			: ETcVnCameraState;
+	
+	ipImageIn		: ITcVnImage;
+	ipImageInDisp	: ITcVnDisplayableImage;
+	ipImageRes		: ITcVnImage;
+	ipImageResDisp	: ITcVnDisplayableImage;
+	
+	// result
+	fAngle			: REAL;	
+	ipEdgePoints1	: ITcVnContainer;
+	ipEdgePoints2	: ITcVnContainer;
+	
+	// parameters
+	aInnerPoint		: TcVnPoint2_REAL := [635, 350];
+	aOuterPoint1	: TcVnPoint2_REAL := [530, 280];
+	aOuterPoint2	: TcVnPoint2_REAL := [790, 280];
+	fMinStrength	: REAL := 50;
+	nSearchLines	: UDINT := 41;
+	fSearchLineDist	: REAL := 1;
+	nSubpixIter		: UDINT := 10;
+	eAlgorithm		: ETcVnEdgeDetectionAlgorithm := TCVN_EDA_INTERPOLATION;
+	
+	// Watchdog
+	hrWD			: HRESULT;
+	tStop			: DINT := 15000;
+	tRest			: DINT;
+	nFraction		: UDINT;
+	
+	// drawing
+	aLine1			: TcVnVector4_LREAL;
+	aLine2			: TcVnVector4_LREAL;
+	aColorRed		: TcVnVector4_LREAL := [255, 0, 0];
+	aColorGreen		: TcVnVector4_LREAL := [0, 175, 0];
+	aColorYellow	: TcVnVector4_LREAL := [255, 255, 0];
+	sText			: STRING(255);
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//	Disclaimer
+  	
+//	THIS publication contains statements about the suitability OF our products FOR certain 
+//	areas OF application. These statements are based on typical features OF our products. 
+//	The examples shown in THIS publication are FOR demonstration purposes only. The 
+//	information provided herein should NOT be regarded as specific operation characteristics. 
+//	It is incumbent on the customer TO check AND decide whether a product is suitable FOR use 
+//	in a particular application. We DO NOT give ANY warranty that the source code which is 
+//	made available with this publication is complete or accurate. 
+  	
+//	THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY 
+//	KIND, EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY 
+//	WITH RESPECT TO NON-INFRINGEMENT, FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR 
+//	FITNESS FOR ANY PARTICULAR PURPOSE. 
+  	
+//	THIS publication may be changed FROM TIME TO TIME without prior notice. No liability 
+//	is assumed FOR errors AND/OR omissions. Our products are described in detail in our 
+//	data sheets AND documentations. Product-specific warnings AND cautions must be observed. 
+//	FOR the latest version OF our data sheets AND documentations visit our website 
+//	(www.beckhoff.de). 
+  	
+//	© Beckhoff Automation GmbH & Co. KG, March 2020
+  	
+//	The reproduction, distribution AND utilization OF THIS document as well as the 
+//	communication OF its contents TO others without express authorization is prohibited. 
+//	Offenders will be held liable FOR the payment OF damages. All rights reserved in the 
+//	event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+//	SAMPLE - MEASURE ANGLE BETWEEN EDGES
+//	============================
+  	
+//	Steps To Do:
+//	-------------
+//	1. Add the images to FileSource1
+//	2. Start the PLC and take a look at the result images in ADS Image Watch 
+//	3. Change parameters using 'Write values' and observe how this influences the result and computation time, e.g. (first only change one parameter at a time, then combine changes):
+// 		- nWindowWidth		: tradeoff between the required computation time and line approximation accuracy
+//		- nSubpixIter		: tradeoff between the required computation time and accuracy (good accuracy for about 10 with TCVN_EDA_INTERPOLATION and 100 with TCVN_EDA_APPROX_ERF)
+// 		- eAlgorithm 		: TCVN_EDA_INTERPOLATION is fastest, TCVN_EDA_APPROX_ERF tends to be more accurate but is slower, TCVN_EDA_APPROX_GAUSSIAN is not suited very well here
+// 		- tStop				: should always be smaller than the PLC task cycle time to prevent exceeds, can restrict the required computation time (function will return partial results)
+
+eState := fbCamera.GetState();
+
+CASE eState OF
+
+TCVN_CS_INITIAL, TCVN_CS_INITIALIZING, TCVN_CS_INITIALIZED, TCVN_CS_OPENING, TCVN_CS_OPENED, TCVN_CS_STARTACQUISITION:
+	hr := fbCamera.StartAcquisition();
+
+TCVN_CS_ACQUIRING:
+	hr := fbCamera.GetCurrentImage(ipImageIn);	
+	
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		
+		hrWD := F_VN_StartRelWatchdog(tStop, hr);
+			hrFunc := F_VN_MeasureAngleBetweenEdgesExp(
+					ipSrcImage				:=	ipImageIn, 
+					fAngle					:=	fAngle, 
+					aInnerPoint				:=	aInnerPoint, 
+					aOuterPoint1			:=	aOuterPoint1, 
+					aOuterPoint2			:=	aOuterPoint2, 
+					eEdgeDirection			:=	TCVN_ED_LIGHT_TO_DARK, 
+					fMinStrength			:=	fMinStrength, 
+					nSearchLines			:=	nSearchLines, 
+					fSearchLineDist			:=	fSearchLineDist,
+					nMaxThickness			:=	7, 
+					bInvertSearchDirection	:=	FALSE,
+					nSubpixelsIterations	:=	nSubpixIter, 
+					bAngleInDegrees			:=	TRUE, 
+					fApproxPrecision		:=	0.0001, 
+					eAlgorithm				:=	eAlgorithm, 
+					ipEdgePoints1			:=	ipEdgePoints1, 
+					ipEdgePoints2			:=	ipEdgePoints2, 
+					hrPrev					:=	hr);
+					
+		hrWD := F_VN_StopWatchdog(hrWD, nFractionProcessed=>nFraction, tRest=>tRest);
+		
+		// Draw result for visualization
+		hr := F_VN_ConvertColorSpace(ipImageIn, ipImageRes, TCVN_CST_GRAY_TO_RGB, hr);		
+		sText := CONCAT('Angle ', REAL_TO_STRING(fAngle));	
+		hr := F_VN_PutTextExp(sText, ipImageRes, 25, 200, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorGreen, 2, TCVN_LT_8_CONNECTED, FALSE,hr);
+		sText := CONCAT(CONCAT('Time  ', DINT_TO_STRING(tStop - tRest)), 'us');		
+		hr := F_VN_PutTextExp(sText, ipImageRes, 25, 250, TCVN_FT_HERSHEY_SIMPLEX, 1.3, aColorGreen, 2, TCVN_LT_8_CONNECTED, FALSE,hr);
+		
+		hr := F_VN_DrawPointExp(REAL_TO_UDINT(aInnerPoint[0]), REAL_TO_UDINT(aInnerPoint[1]), ipImageRes, TCVN_DS_CIRCLE, aColorGreen, 3, 2, TCVN_LT_8_CONNECTED, hr);
+		hr := F_VN_DrawPointExp(REAL_TO_UDINT(aOuterPoint1[0]), REAL_TO_UDINT(aOuterPoint1[1]), ipImageRes, TCVN_DS_X, aColorRed, 3, 2, TCVN_LT_8_CONNECTED, hr);
+		hr := F_VN_DrawPointExp(REAL_TO_UDINT(aOuterPoint2[0]), REAL_TO_UDINT(aOuterPoint2[1]), ipImageRes, TCVN_DS_X, aColorYellow, 3, 2, TCVN_LT_8_CONNECTED, hr);
+		hr := F_VN_FitLine(ipEdgePoints1, aLine1, hr);
+		hr := F_VN_FitLine(ipEdgePoints2, aLine2, hr);
+		hr := F_VN_DrawLine_TcVnVector4_LREAL(aLine1, ipImageRes, aColorGreen, 2, hr);
+		hr := F_VN_DrawLine_TcVnVector4_LREAL(aLine2, ipImageRes, aColorGreen, 2, hr);
+		hr := F_VN_DrawPointsExp(ipEdgePoints1, ipImageRes, TCVN_DS_PLUS, aColorRed, 1, 1, TCVN_LT_8_CONNECTED, hr);
+		hr := F_VN_DrawPointsExp(ipEdgePoints2, ipImageRes, TCVN_DS_PLUS, aColorYellow, 1, 1, TCVN_LT_8_CONNECTED, hr);
+				
+		// Display source and result image		
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, S_OK);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, S_OK);
+	END_IF
+	
+TCVN_CS_ERROR:
+	hr := fbCamera.Reset();	
+
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="48" Count="46" />
+      <LineId Id="195" Count="0" />
+      <LineId Id="96" Count="26" />
+      <LineId Id="152" Count="0" />
+      <LineId Id="124" Count="7" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="132" Count="17" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="150" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
