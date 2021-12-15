@@ -1,7 +1,9 @@
 # Getting Started
 Clone the repository or download as a ZIP.<br/>
 Download the [TF7xxx sample images](https://download.beckhoff.com/download//software/GitHub/TF7xxx/TF7xxx_Sample_Images.zip) as ZIP from our website.<br/>
-First unzip the repository if not cloned, then extract the sample images into the images folder.
+First unzip the repository if not cloned, then extract the sample images into the images folder.<br/>
+You can use the PowerShell script (PS C:\TF7xxx_Samples> .\SetTcCOMModuleVersion.ps1 4.0.2.13) to set the version of the TcCOM modules (Camera or Filesource object) to a specific version.<br/>
+The PLC library always uses the newest version by default.
 
 # About this repository
 This repository contains official sample code for the following products offered by [Beckhoff Automation](https://www.beckhoff.com).<br/>
