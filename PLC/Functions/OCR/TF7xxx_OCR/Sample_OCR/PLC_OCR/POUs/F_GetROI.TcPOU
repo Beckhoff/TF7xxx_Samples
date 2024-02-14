@@ -1,0 +1,224 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="F_GetROI" Id="{32e039f3-9e63-4203-91dc-ee36d78793fb}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_GetROI : HRESULT
+VAR_INPUT
+	sFileName 			: 	REFERENCE TO STRING;
+	stRoi				:	REFERENCE TO TcVnRectangle_UDINT;
+	fThreshold			:	REFERENCE TO LREAL;
+	bInvertImage		: 	REFERENCE TO BOOL;
+	sPattern			:	REFERENCE TO STRING;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF sFileName = 'OCR_01.png' THEN
+	stRoi.nX := 86;
+	stRoi.nY := 34;
+	stRoi.nWidth := 263;
+	stRoi.nHeight := 102;
+	fThreshold := 150;
+	bInvertImage := TRUE;
+	sPattern := 'dd#dd#dd';
+ELSIF sFileName = 'OCR_02.png' THEN
+	stRoi.nX := 69;
+	stRoi.nY := 40;
+	stRoi.nWidth := 237;
+	stRoi.nHeight := 80;
+	fThreshold := 150;
+	bInvertImage := TRUE;
+	sPattern := 'dd#dd#dddd';
+ELSIF sFileName = 'OCR_03.png' THEN
+	stRoi.nX := 30;
+	stRoi.nY := 40;
+	stRoi.nWidth := 460;
+	stRoi.nHeight := 110;
+	fThreshold := 120;
+	bInvertImage := TRUE;
+	sPattern := 'udddudd###d';
+ELSIF sFileName = 'OCR_04.png' THEN
+	stRoi.nX := 131;
+	stRoi.nY := 25;
+	stRoi.nWidth := 243;
+	stRoi.nHeight := 83;
+	fThreshold := 75;
+	bInvertImage := TRUE;
+	sPattern := 'dd#dd#dddd';
+ELSIF sFileName = 'OCR_05.png' THEN
+	stRoi.nX := 129;
+	stRoi.nY := 78;
+	stRoi.nWidth := 257;
+	stRoi.nHeight := 115;
+	fThreshold := 150;
+	bInvertImage := TRUE;
+	sPattern := 'dd#dd#dd';
+ELSIF sFileName = 'OCR_06.png' THEN
+	stRoi.nX := 71;
+	stRoi.nY := 50;
+	stRoi.nWidth := 293;
+	stRoi.nHeight := 101;
+	fThreshold := 75;
+	bInvertImage := TRUE;
+	sPattern := 'dd#dd#dddd';
+ELSIF sFileName = 'OCR_07.png' THEN
+	stRoi.nX := 50;
+	stRoi.nY := 120;
+	stRoi.nWidth := 470;
+	stRoi.nHeight := 110;
+	fThreshold := 140;
+	bInvertImage := FALSE;
+	sPattern := 'udddudd###';
+ELSIF sFileName = 'OCR_08.png' THEN
+	stRoi.nX := 100;
+	stRoi.nY := 83;
+	stRoi.nWidth := 276;
+	stRoi.nHeight := 108;
+	fThreshold := 165;
+	bInvertImage := TRUE;
+	sPattern := 'dd#dd#dd';
+ELSIF sFileName = 'OCR_09.png' THEN
+	stRoi.nX := 90;
+	stRoi.nY := 103;
+	stRoi.nWidth := 284;
+	stRoi.nHeight := 82; 
+	fThreshold := 178;
+	bInvertImage := TRUE;
+	sPattern := 'dd#dd#dddd';
+ELSIF sFileName = 'OCR_10.png' THEN
+	stRoi.nX := 207;
+	stRoi.nY := 4;
+	stRoi.nWidth := 283;
+	stRoi.nHeight := 104;
+	fThreshold := 130;
+	bInvertImage := TRUE;
+	sPattern := 'dd#dd#dddd';
+ELSIF sFileName = 'OCR_11.png' THEN
+	stRoi.nX := 175;
+	stRoi.nY := 245;
+	stRoi.nWidth := 660;
+	stRoi.nHeight := 115;
+	fThreshold := 160;
+	bInvertImage := TRUE;
+	sPattern := 'uu#dddddddd';	
+ELSIF sFileName = 'OCR_12.png' THEN 
+	stRoi.nX := 74;
+	stRoi.nY := 198;
+	stRoi.nWidth := 248;
+	stRoi.nHeight := 95;
+	fThreshold := 130;
+	bInvertImage := FALSE;
+	sPattern := 'dd#dddd';
+ELSIF sFileName = 'OCR_13.png' THEN
+	stRoi.nX := 404;
+	stRoi.nY := 2;
+	stRoi.nWidth := 392;
+	stRoi.nHeight := 159;
+	fThreshold := 130;
+	bInvertImage := FALSE;
+	sPattern := 'dd#dd#dd';
+ELSIF sFileName = 'OCR_14.png' THEN
+	stRoi.nX := 260;
+	stRoi.nY := 105;
+	stRoi.nWidth := 340;
+	stRoi.nHeight := 102;
+	fThreshold := 160;
+	bInvertImage := FALSE;
+	sPattern := 'dd#dd#dddd';
+ELSIF sFileName = 'OCR_15.png' THEN
+	stRoi.nX := 250;
+	stRoi.nY := 5;
+	stRoi.nWidth := 560;
+	stRoi.nHeight := 125;
+	fThreshold := 160;
+	bInvertImage := TRUE;
+	sPattern := 'uddddd#dd#dd';
+ELSIF sFileName = 'OCR_16.png' THEN
+	stRoi.nX := 200;
+	stRoi.nY := 0;
+	stRoi.nWidth := 285;
+	stRoi.nHeight := 70;
+	fThreshold := 130;
+	bInvertImage := FALSE;
+	sPattern := 'dd#dd#dddd';
+ELSIF sFileName = 'OCR_17.png' THEN
+	stRoi.nX := 247;
+	stRoi.nY := 83;
+	stRoi.nWidth := 213;
+	stRoi.nHeight := 94;
+	fThreshold := 155;
+	bInvertImage := FALSE;
+	sPattern := 'dd#dddd';
+ELSIF sFileName = 'OCR_18.png' THEN
+	stRoi.nX := 25;
+	stRoi.nY := 187;
+	stRoi.nWidth := 330;
+	stRoi.nHeight := 109;
+	fThreshold := 100;
+	bInvertImage := FALSE;
+	sPattern := 'dd#dddd';
+ELSIF sFileName = 'OCR_19.png' THEN
+	stRoi.nX := 365;
+	stRoi.nY := 70;
+	stRoi.nWidth := 300;
+	stRoi.nHeight := 95;
+	fThreshold := 80;
+	bInvertImage := TRUE;
+	sPattern := 'uduuuud';
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="F_GetROI">
+      <LineId Id="8" Count="5" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="201" Count="0" />
+      <LineId Id="14" Count="5" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="202" Count="0" />
+      <LineId Id="233" Count="6" />
+      <LineId Id="232" Count="0" />
+      <LineId Id="20" Count="5" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="203" Count="0" />
+      <LineId Id="32" Count="5" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="38" Count="5" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="241" Count="6" />
+      <LineId Id="240" Count="0" />
+      <LineId Id="44" Count="5" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="207" Count="0" />
+      <LineId Id="50" Count="5" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="208" Count="0" />
+      <LineId Id="62" Count="5" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="210" Count="0" />
+      <LineId Id="254" Count="6" />
+      <LineId Id="250" Count="0" />
+      <LineId Id="82" Count="6" />
+      <LineId Id="211" Count="0" />
+      <LineId Id="89" Count="6" />
+      <LineId Id="212" Count="0" />
+      <LineId Id="96" Count="6" />
+      <LineId Id="213" Count="0" />
+      <LineId Id="268" Count="6" />
+      <LineId Id="266" Count="0" />
+      <LineId Id="103" Count="6" />
+      <LineId Id="214" Count="0" />
+      <LineId Id="110" Count="6" />
+      <LineId Id="215" Count="0" />
+      <LineId Id="117" Count="5" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="216" Count="0" />
+      <LineId Id="185" Count="5" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="221" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="72" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

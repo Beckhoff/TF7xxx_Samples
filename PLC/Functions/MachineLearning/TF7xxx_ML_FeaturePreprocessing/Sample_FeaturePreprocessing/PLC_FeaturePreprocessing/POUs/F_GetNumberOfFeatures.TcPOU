@@ -1,0 +1,48 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="F_GetNumberOfFeatures" Id="{e2d8b2c5-4c16-4180-9e7b-c8ad46bbe28c}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_GetNumberOfFeatures : HRESULT
+VAR_INPUT
+	ipContainerList		:	ITcVnContainer;
+	nNumberOfSamples	:	REFERENCE TO ULINT;
+	nNumberOfFeatures	:	REFERENCE TO ULINT;
+	hrPrev				:	HRESULT;
+END_VAR
+VAR
+	hr					:	HRESULT;
+	ipContainer			:	ITcVnContainer;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF FAILED(hrPrev) THEN
+	F_GetNumberOfFeatures := hrPrev;
+	RETURN;
+END_IF
+
+IF ipContainerList = 0 THEN
+	F_GetNumberOfFeatures := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+	RETURN;
+END_IF
+
+IF ipContainerList.CheckIfBasicContainer() = S_OK THEN
+	F_GetNumberOfFeatures := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+	RETURN;
+END_IF
+
+// Get the number of samples
+hr := F_VN_GetNumberOfElements(ipContainerList, nNumberOfSamples, hr);
+IF nNumberOfSamples >= 1 THEN
+	hr := F_VN_GetAt_ITcVnContainer(ipContainerList, ipContainer, 0, hr);
+	// Get the number of features
+	hr := F_VN_GetNumberOfElements(ipContainer, nNumberOfFeatures, hr);
+END_IF
+
+FW_SafeRelease(ADR(ipContainer));
+F_GetNumberOfFeatures := hr;]]></ST>
+    </Implementation>
+    <LineIds Name="F_GetNumberOfFeatures">
+      <LineId Id="114" Count="23" />
+      <LineId Id="33" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

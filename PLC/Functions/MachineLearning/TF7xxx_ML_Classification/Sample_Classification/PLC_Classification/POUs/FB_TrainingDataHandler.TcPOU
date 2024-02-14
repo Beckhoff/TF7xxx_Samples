@@ -1,0 +1,155 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_TrainingDataHandler" Id="{e8d0f3ff-a8fb-40db-b46e-857c829a45a5}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK PUBLIC FB_TrainingDataHandler
+VAR_INPUT
+	eClassifierType		:	E_ClassifierType;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	hr					: HRESULT;
+	eCameraState		: ETcVnCameraState;
+	fbCameraTraining	: FB_VN_SimpleCameraControl;	
+	ipImageTraining		: ITcVnImage;
+	ipImageTrainingDisp	: ITcVnDisplayableImage;
+	bTrigger			: BOOL := TRUE;
+	sLabel				: STRING(255);
+	aGreen				: TcVnVector4_LREAL := [0, 255, 0];
+	
+	// Image Info
+	nImagesTotal		: UDINT := 12;
+	nImagesLoaded		: UDINT := 0;
+	
+	ipFeatures			: ITcVnContainer;
+	ipImageFeatures		: ITcVnContainer;
+	ipLabels			: ITcVnContainer;
+	ipScales			: ITcVnContainer;
+	ipScaledFeatures	: ITcVnContainer;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Initialize container
+IF ipImageFeatures = 0 THEN
+	hr := F_VN_CreateContainer(ipImageFeatures, ContainerType_Vector_Vector_LREAL, nImagesTotal, hr);
+	hr := F_VN_CreateContainer(ipLabels, ContainerType_Vector_DINT, nImagesTotal, hr);
+END_IF
+
+// Get training images
+eCameraState := fbCameraTraining.GetState();
+
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraTraining.Reset();
+	
+// Camera trigger image
+ELSIF eCameraState = TCVN_CS_TRIGGERING THEN
+	hr := fbCameraTraining.TriggerImage();
+	
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraTraining.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+
+	IF bTrigger THEN
+		hr := fbCameraTraining.TriggerImage();
+		IF SUCCEEDED(hr) THEN
+			bTrigger := FALSE;
+		END_IF
+	ELSE
+		hr := fbCameraTraining.GetCurrentImage(ipImageTraining);
+
+		// Check if new image was received
+		IF SUCCEEDED(hr) AND ipImageTraining <> 0 THEN
+			
+			// Get features from training image 
+			hr := F_ExtractFeatures(ipImageTraining, ipFeatures, hr);
+		
+			// Add features and label to the containers. First class label = 0, second class = 1
+			hr := F_VN_SetAt_ITcVnContainer(ipFeatures, ipImageFeatures, nImagesLoaded, hr);
+			FW_SafeRelease(ADR(ipFeatures));
+			hr := F_VN_SetAt_DINT(UDINT_TO_DINT(nImagesLoaded / 6), ipLabels, nImagesLoaded, hr);
+			
+			// Display image
+			sLabel := CONCAT('Image Number: ', UDINT_TO_STRING(nImagesLoaded + 1));
+			hr := F_VN_PutTextExp(sLabel, ipImageTraining, 30, 60, TCVN_FT_HERSHEY_PLAIN, 4, aGreen, 2, TCVN_LT_ANTIALIASED, FALSE, hr);
+			hr := F_VN_TransformIntoDisplayableImage(ipImageTraining, ipImageTrainingDisp, hr);
+			
+			nImagesLoaded := nImagesLoaded + 1;
+			IF nImagesLoaded < nImagesTotal THEN
+				// Trigger next image
+				bTrigger := TRUE;
+			ELSE
+				// After collecting all training data, normalize the feature values
+				hr := F_VN_GetFeatureScales(ipImageFeatures, ipScales, TCVN_FST1_MINMAX, hr);
+				IF eClassifierType = E_ClassifierType.STA THEN
+					hr := F_VN_FeatureScalingExp(ipImageFeatures, ipScales, ipScaledFeatures, 0.1, 0.9, hr);
+				ELSE
+					hr := F_VN_FeatureScaling(ipImageFeatures, ipScales, ipScaledFeatures, hr);
+				END_IF
+				FW_SafeRelease(ADR(ipImageFeatures));
+			END_IF
+		END_IF
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <Method Name="GetTrainingData" Id="{ec84d878-7e4f-45fb-b2ad-9223d0f64724}">
+      <Declaration><![CDATA[METHOD PUBLIC GetTrainingData : HRESULT
+VAR_INPUT
+	ipTrainingSamples	: REFERENCE TO ITcVnContainer;
+	ipClassLabels		: REFERENCE TO ITcVnContainer;
+	ipFeatureScaling	: REFERENCE TO ITcVnContainer;
+END_VAR
+VAR
+	hr					: HRESULT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nImagesLoaded = nImagesTotal THEN
+	hr := F_VN_CopyContainer(ipScaledFeatures, ipTrainingSamples, hr);
+	hr := F_VN_CopyContainer(ipLabels, ipClassLabels, hr);
+	GetTrainingData := F_VN_CopyContainer(ipScales, ipFeatureScaling, hr);
+ELSE
+	GetTrainingData := S_PENDING;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Reset" Id="{7a50c466-2638-4410-8913-503d74960d64}">
+      <Declaration><![CDATA[METHOD PUBLIC Reset : HRESULT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nImagesLoaded := 0;
+FW_SafeRelease(ADR(ipFeatures));
+FW_SafeRelease(ADR(ipImageFeatures));
+FW_SafeRelease(ADR(ipLabels));
+FW_SafeRelease(ADR(ipScales));
+FW_SafeRelease(ADR(ipScaledFeatures));
+bTrigger := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_TrainingDataHandler">
+      <LineId Id="478" Count="52" />
+      <LineId Id="567" Count="3" />
+      <LineId Id="566" Count="0" />
+      <LineId Id="532" Count="4" />
+      <LineId Id="53" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrainingDataHandler.GetTrainingData">
+      <LineId Id="37" Count="6" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrainingDataHandler.Reset">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

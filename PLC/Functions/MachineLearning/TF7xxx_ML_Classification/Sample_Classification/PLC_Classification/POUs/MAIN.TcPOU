@@ -1,0 +1,348 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MAIN" Id="{ff7c706d-1307-422f-b131-cfadeb08b68f}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	eClassifierType		:	E_ClassifierType;		// Classification type
+	stParams			:	ST_ClassifierParams;	// Classification parameters
+	bResetModel			:	BOOL;					// Reset model to start a new training with a changed model or parameters
+	bResetTrainingData	:	BOOL;					// Reset the trained features to get new ones and train model
+	eTrainedModelType	: 	E_ClassifierType;
+	
+	hrTrain				:	HRESULT;
+	hrTest				:	HRESULT;
+	
+	ipImageTest			:	ITcVnImage;
+	ipImageResDisp		:	ITcVnDisplayableImage;
+	
+	eCameraState		:	ETcVnCameraState;	
+	fbCameraTest		:	FB_VN_SimpleCameraControl;
+	
+	fbTrainingDataHandler:	FB_TrainingDataHandler;
+	
+	ipClassifierModel	:	ITcVnMlModel;
+	ipSamplesTraining	:	ITcVnContainer;
+	ipClassLabels		:	ITcVnContainer;
+	ipClassLabelsWork	:	ITcVnContainer;
+	ipFeatureScaling	:	ITcVnContainer;
+	ipSampleTest		:	ITcVnContainer;
+	nPredictedClass		:	DINT;
+	fNovelty			:	REAL;
+	
+	// Result
+	fNoveltyThreshold	:	REAL;
+	sLabel				:	STRING(255);
+	aClassNames			:	ARRAY[0..1] OF STRING := ['Apple', 'Banana'];
+	aGreen				:	TcVnVector4_LREAL := [0, 255, 0];
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Disclaimer
+
+// This publication contains statements about the suitability of our products for certain
+// areas of application. These statements are based on typical features of our products.
+// The examples shown in this publication are for demonstration purposes only.
+// The information provided herein should not be regarded as specific operation characteristics.
+// It is incumbent on the customer to check and decide whether a product is suitable for use
+// in a particular application. We do not give any warranty that the source code which is
+// made available with this publication is complete or accurate.
+
+// THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND,
+// EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY WITH RESPECT TO NON-INFRINGEMENT,
+// FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR FITNESS FOR ANY PARTICULAR PURPOSE.
+
+// This publication may be changed from time to time without prior notice.
+// No liability is assumed for errors and/or omissions.
+// Our products are described in detail in our data sheets and documentations.
+// Product-specific warnings and cautions must be observed.
+// For the latest version of our data sheets and documentations visit our website (www.beckhoff.de).
+
+// © Beckhoff Automation GmbH & Co. KG, December 2023
+
+// The reproduction, distribution and utilization of this document as well as the communication
+// of its contents to others without express authorization is prohibited. 
+// Offenders will be held liable for the payment of damages.
+// All rights reserved in the event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+// SAMPLE - Machine Learning Classification
+//	-------------------------------------------------------
+
+// Steps To Do:
+// ------------
+// 1. Add the training images to the TrainingImages control
+// 2. Add the test images to the TestingImages control
+// 3. Activate the configuration -> Start TwinCAT system and PLC to run -> watch the results in the ADS Image Watch
+// 4. Change eClassifierType and stParams to change the model or settings
+// 5. Set bResetModel to start create a new model and start training
+//    Note: If you change to eClassifierType = STA or from this type to another, a bResetTrainingData is automatically performed due to the different scaling of the training data.
+// 6. Set bResetTrainingData to get new training data if images or feature extraction changed
+
+// Reset the trained features to get new ones and train model
+IF bResetTrainingData
+	OR (eTrainedModelType <> E_ClassifierType.STA AND eClassifierType = E_ClassifierType.STA)
+	OR (eTrainedModelType = E_ClassifierType.STA AND eClassifierType <> E_ClassifierType.STA) THEN
+	
+	bResetTrainingData := FALSE;
+	fbTrainingDataHandler.Reset();
+	FW_SafeRelease(ADR(ipSamplesTraining));
+	FW_SafeRelease(ADR(ipClassLabels));
+	FW_SafeRelease(ADR(ipClassLabelsWork));
+	FW_SafeRelease(ADR(ipFeatureScaling));
+	FW_SafeRelease(ADR(ipClassifierModel));
+	eTrainedModelType := eClassifierType;
+	// Reset return value
+	hrTrain := S_OK;
+END_IF
+
+// Get sample data for training
+fbTrainingDataHandler(eClassifierType := eClassifierType);
+IF ipSamplesTraining = 0 AND ipClassLabels = 0 AND ipFeatureScaling = 0 THEN
+	hrTrain := fbTrainingDataHandler.GetTrainingData(ipSamplesTraining, ipClassLabels, ipFeatureScaling);
+	hrTrain := F_VN_CopyContainer(ipClassLabels, ipClassLabelsWork, hrTrain);
+END_IF
+
+// Retrain with changed model or parameters
+IF bResetModel THEN
+	bResetModel := FALSE;
+	FW_SafeRelease(ADR(ipClassifierModel));
+	hrTrain := F_VN_CopyContainer(ipClassLabels, ipClassLabelsWork, hrTrain);
+	eTrainedModelType := eClassifierType;
+	// Reset return value
+	hrTrain := S_OK;
+END_IF
+
+IF SUCCEEDED(hrTrain) AND ipSamplesTraining <> 0 AND ipClassLabels <> 0 AND ipClassifierModel = 0 THEN
+	
+	// Create the model
+	CASE eClassifierType OF
+		
+		E_ClassifierType.KNN:
+			hrTrain := F_VN_CreateKnnModel(
+								ipMlModel				:=	ipClassifierModel,
+								eKnnType				:=	TCVN_KNN_CLASSIFIER,
+								nK						:=	stParams.nKnnK,
+								hrPrev					:=	hrTrain);
+								
+			// Set novelty threshold according to model results 
+			fNoveltyThreshold := 0.03;
+			
+		E_ClassifierType.NBC:
+			hrTrain := F_VN_CreateNbcModel(
+								ipMlModel				:=	ipClassifierModel,
+								eNbcType				:=	TCVN_NBC_CLASSIFIER,
+								hrPrev					:=	hrTrain);
+			
+			// Set novelty threshold according to model results
+			fNoveltyThreshold := 4.0;
+			
+		E_ClassifierType.RTrees:
+			hrTrain := F_VN_CreateRTreesModelExp(
+								ipMlModel				:=	ipClassifierModel,
+								eRTreesType				:=	TCVN_RT_CLASSIFIER,
+								nMaxDepth				:=	stParams.nRTreesMaxDepth,
+								nMinSamples				:=	stParams.nRTreesMinSamples,
+								nActiveVariables		:=	stParams.nRTreesActiveVariables,
+								nMaxiterations			:=	stParams.nRTreesMaxIterations,
+								fEpsilon				:=	stParams.fRTreesEpsilon,
+								hrPrev					:=	hrTrain);
+
+		E_ClassifierType.STA:
+			hrTrain := F_VN_CreateStaModelExp2(
+									ipMlModel           :=	ipClassifierModel,
+									eStaType            :=	TCVN_STA_CLASSIFIER,
+									fRho                :=	stParams.fStaRho,
+									nNu                 :=	stParams.nStaNu,
+									bDoublePrecision    :=	stParams.bStaDoublePrecision,
+									fBetaSbm			:=	stParams.fStaBetaSbm, 
+									nPhi				:=	stParams.nStaPhi, 
+									nTau				:=	stParams.nStaTau, 
+									hrPrev				:=	hrTrain); 
+			
+			// Set novelty threshold according to model results
+			fNoveltyThreshold := 0.2;
+		
+		E_ClassifierType.SVM:
+			hrTrain := F_VN_CreateSvmModelExp(
+								ipMlModel				:=	ipClassifierModel,
+								eSvmType				:=	TO_UDINT(stParams.eSvmType),
+								fC						:=	stParams.fSvmC,
+								fNu						:=	stParams.fSvmNu,
+								fP						:=	0,
+								eKernelType				:=	stParams.eSvmKernelType,
+								fGamma					:=	stParams.fSvmGamma,
+								fCoef0					:=	stParams.fSvmCoef0,
+								fDegree					:=	stParams.fSvmDegree,
+								nMaxIterations			:=	stParams.nSvmMaxIterations,
+								fEpsilon				:=	stParams.fSvmEpsilon,
+								hrPrev					:=	hrTrain);
+			
+		E_ClassifierType.SVM_SGD:
+			hrTrain := F_VN_CreateSvmSgdClassifierExp(
+								ipMlModel				:=	ipClassifierModel,
+								eType					:=	stParams.eSvmSgdClassifierType,
+								eMarginType				:=	stParams.eSvmSgdClassifierMarginType,
+								fMarginRegularization	:=	stParams.fSvmSgdMarginRegularization,
+								fInitialStepSize		:=	stParams.fSvmSgdInitialStepSize,
+								fStepDecreasingPower	:=	stParams.fSvmSgdStepDecreasingPower,
+								nMaxIterations			:=	stParams.nSvmSgdMaxIterations,
+								fEpsilon				:=	stParams.fSvmSgdEpsilon,
+								hrPrev					:=	hrTrain);
+	
+			// Change class labels from [0,1] to [-1,1] to be compatilbe with the SvmSgdClassifier model
+			hrTrain := F_VN_MultiplyWithContainerElements1(2.0, ipClassLabelsWork, hrTrain);					
+			hrTrain := F_VN_AddToContainerElements_DINT(-1, ipClassLabelsWork, hrTrain);
+	END_CASE
+	
+	// Train model
+	hrTrain := F_VN_TrainBatch(
+					ipMlModel	:=	ipClassifierModel,
+					ipSamples	:=	ipSamplesTraining,
+					ipOutputs	:=	ipClassLabelsWork,
+					hrPrev		:=	hrTrain);
+
+END_IF
+
+// Get test images
+eCameraState := fbCameraTest.GetState();
+
+IF eCameraState = TCVN_CS_ERROR THEN
+	hrTest := fbCameraTest.Reset();
+
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hrTest := fbCameraTest.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hrTest := fbCameraTest.GetCurrentImage(ipImageTest);
+
+	// Check if new image was received
+	IF SUCCEEDED(hrTest) AND ipImageTest <> 0 THEN
+
+        IF ipClassifierModel <> 0 AND ipFeatureScaling <> 0 THEN
+			// Get features from sample image and scale 
+			hrTest := F_ExtractFeatures(ipImageTest, ipSampleTest, hrTest);
+			IF eClassifierType = E_ClassifierType.STA THEN
+				hrTest := F_VN_FeatureScalingExp(ipSampleTest, ipFeatureScaling, ipSampleTest, 0.1, 0.9, hrTest);
+			ELSE
+				hrTest := F_VN_FeatureScaling(ipSampleTest, ipFeatureScaling, ipSampleTest, hrTest);
+			END_IF
+			
+			// Prediction with optional novelty calculation if supported
+			CASE eClassifierType OF
+				
+				E_ClassifierType.KNN, E_ClassifierType.NBC, E_ClassifierType.STA:
+					// Predict classification result and novelty
+					hrTest := F_VN_PredictSampleClassExp(ipClassifierModel, ipSampleTest, nPredictedClass, fNovelty, hrTest);
+				
+					// Check the degree of novelty and get result
+					IF fNovelty <= fNoveltyThreshold THEN
+						sLabel := CONCAT('Prediction: ',aClassNames[nPredictedClass]);
+					ELSE
+						sLabel := 'Prediction: Unknown';
+					END_IF
+			ELSE
+				// Predict classification result
+				hrTest := F_VN_PredictSampleClass(ipClassifierModel, ipSampleTest, nPredictedClass, hrTest);
+				
+				// Change predicted result for SvmSgdClassifier model and get result
+				IF eClassifierType = E_ClassifierType.SVM_SGD AND nPredictedClass < 0 THEN 
+					nPredictedClass := nPredictedClass + 1; 
+				END_IF
+				sLabel := CONCAT('Prediction: ',aClassNames[nPredictedClass]);
+			END_CASE
+			
+			// Write result
+			hrTest := F_VN_PutTextExp(sLabel, ipImageTest, 30, 60, TCVN_FT_HERSHEY_PLAIN, 4, aGreen, 2, TCVN_LT_ANTIALIASED, FALSE, hrTest);
+		END_IF
+		
+		// Display Image
+		hrTest := F_VN_TransformIntoDisplayableImage(ipImageTest, ipImageResDisp, S_OK);
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="2503" Count="2" />
+      <LineId Id="2525" Count="0" />
+      <LineId Id="2507" Count="2" />
+      <LineId Id="2526" Count="1" />
+      <LineId Id="2511" Count="1" />
+      <LineId Id="2528" Count="1" />
+      <LineId Id="2513" Count="9" />
+      <LineId Id="2530" Count="1" />
+      <LineId Id="2524" Count="0" />
+      <LineId Id="2131" Count="12" />
+      <LineId Id="2621" Count="0" />
+      <LineId Id="2272" Count="0" />
+      <LineId Id="2144" Count="2" />
+      <LineId Id="2707" Count="0" />
+      <LineId Id="2706" Count="0" />
+      <LineId Id="2708" Count="0" />
+      <LineId Id="2147" Count="3" />
+      <LineId Id="2415" Count="0" />
+      <LineId Id="2151" Count="0" />
+      <LineId Id="2347" Count="0" />
+      <LineId Id="2705" Count="0" />
+      <LineId Id="2701" Count="0" />
+      <LineId Id="2700" Count="0" />
+      <LineId Id="2152" Count="2" />
+      <LineId Id="2565" Count="0" />
+      <LineId Id="2156" Count="1" />
+      <LineId Id="2413" Count="0" />
+      <LineId Id="2158" Count="5" />
+      <LineId Id="2414" Count="0" />
+      <LineId Id="2704" Count="0" />
+      <LineId Id="2703" Count="0" />
+      <LineId Id="2702" Count="0" />
+      <LineId Id="2164" Count="12" />
+      <LineId Id="2417" Count="0" />
+      <LineId Id="2409" Count="0" />
+      <LineId Id="2406" Count="0" />
+      <LineId Id="2177" Count="5" />
+      <LineId Id="2408" Count="0" />
+      <LineId Id="2418" Count="0" />
+      <LineId Id="2407" Count="0" />
+      <LineId Id="2183" Count="8" />
+      <LineId Id="2194" Count="1" />
+      <LineId Id="2581" Count="0" />
+      <LineId Id="2574" Count="0" />
+      <LineId Id="2657" Count="8" />
+      <LineId Id="2579" Count="0" />
+      <LineId Id="2656" Count="0" />
+      <LineId Id="2655" Count="0" />
+      <LineId Id="2196" Count="0" />
+      <LineId Id="2580" Count="0" />
+      <LineId Id="2197" Count="12" />
+      <LineId Id="2211" Count="13" />
+      <LineId Id="2372" Count="0" />
+      <LineId Id="2419" Count="0" />
+      <LineId Id="2416" Count="0" />
+      <LineId Id="2225" Count="29" />
+      <LineId Id="2583" Count="3" />
+      <LineId Id="2582" Count="0" />
+      <LineId Id="2256" Count="0" />
+      <LineId Id="2371" Count="0" />
+      <LineId Id="2351" Count="0" />
+      <LineId Id="2354" Count="1" />
+      <LineId Id="2587" Count="0" />
+      <LineId Id="2356" Count="0" />
+      <LineId Id="2366" Count="0" />
+      <LineId Id="2360" Count="4" />
+      <LineId Id="2358" Count="0" />
+      <LineId Id="2357" Count="0" />
+      <LineId Id="2370" Count="0" />
+      <LineId Id="2352" Count="0" />
+      <LineId Id="2426" Count="0" />
+      <LineId Id="2368" Count="0" />
+      <LineId Id="2422" Count="0" />
+      <LineId Id="2424" Count="1" />
+      <LineId Id="2367" Count="0" />
+      <LineId Id="2353" Count="0" />
+      <LineId Id="2348" Count="1" />
+      <LineId Id="2262" Count="6" />
+      <LineId Id="14" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

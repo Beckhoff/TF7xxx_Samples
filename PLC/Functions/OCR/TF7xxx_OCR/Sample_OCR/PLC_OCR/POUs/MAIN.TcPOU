@@ -1,0 +1,362 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MAIN" Id="{6957ab81-4810-4bbd-a8f1-7fb460f6a4e1}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	bInitialized 		: 	BOOL := FALSE;
+	bDeinitialize		:	BOOL;
+	bCheck				:	BOOL;
+	fbInit 				: 	FB_VN_InitializeFunction;	
+	nReturnCode			:   UDINT;
+	
+	hr					:	HRESULT;
+	hrCheck				:	HRESULT;
+	hrDeinitialize		:	HRESULT;
+	hrOCR				:	HRESULT;
+	fbCameraControl		:	FB_VN_FileSourceControl;
+	eCameraState		:	ETcVnCameraState;
+	sFileName 			: 	STRING;
+	ImageCounter		:	UINT;
+
+	stPixelFormat		:	TcVnPixelFormat;
+	stRoi				:	TcVnRectangle_UDINT;
+	fThreshold			:	LREAL;
+	bInvertImage		:	BOOL := TRUE;
+	
+	ipOriginalImage		:	ITcVnImage; 
+	ipBinaryImage		:	ITcVnImage; 
+	ipThreshBorder		:	ITcVnImage;
+	ipStructElem		: 	ITcvnImage;
+	ipOriginImageDisp	:	ITcVnDisplayableImage;
+	ipBinImageDisp		:	ITcVnDisplayableImage;
+	ipThreshBorderDisp	:	ITcVnDisplayableImage;
+	
+	aRedColor			: 	TcVnVector4_LREAL := [255,0,0];
+	aGreenColor			: 	TcVnVector4_LREAL := [0,255,0];
+	aBlueColor			: 	TcVnVector4_LREAL := [0,0,255];
+	aWhiteColor			: 	TcVnVector4_LREAL := [255,255,255];
+	
+	// OCR
+	bUseExpFunction		:	BOOL := FALSE;
+	ipOCRResult 		:	ITcVnContainer; (* Returns the detected characters (ContainerType_Vector_String_SINT) *)
+	sText 				: 	STRING(255);
+	nStringLenght		:	INT;
+
+	// OCR Exp
+	sPattern			:	STRING;			(* String template containing the format in which characters are presented *)
+	eOcrOptions			:	UDINT;			(* Specifies which options must be applied to the function (ETcVnOcrOptions) *)
+	ipBoundingBoxes		:	ITcVnContainer;	(* Returns the corresponding bounding boxes of the detected characters (ContainerType_Vector_TcVnRectangle_DINT, optional, set to 0 if not required) *)
+	ipConfidences		:	ITcVnContainer;	(* Returns the corresponding classification confidences of the detected characters (ContainerType_Vector_REAL, optional, set to 0 if not required) *)
+	fMinConfidence		:	REAL;			(* Returns the minimum value of the confidences *)
+	
+	nNumberOfElements	: 	ULINT;
+	nIterator			: 	ULINT;
+	aConfidences		:	ARRAY [0..11] OF REAL;
+	stRectangle			:	TcVnRectangle_DINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Disclaimer
+
+// This publication contains statements about the suitability of our products for certain
+// areas of application. These statements are based on typical features of our products.
+// The examples shown in this publication are for demonstration purposes only.
+// The information provided herein should not be regarded as specific operation characteristics.
+// It is incumbent on the customer to check and decide whether a product is suitable for use
+// in a particular application. We do not give any warranty that the source code which is
+// made available with this publication is complete or accurate.
+
+// THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND,
+// EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY WITH RESPECT TO NON-INFRINGEMENT,
+// FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR FITNESS FOR ANY PARTICULAR PURPOSE.
+
+// This publication may be changed from time to time without prior notice.
+// No liability is assumed for errors and/or omissions.
+// Our products are described in detail in our data sheets and documentations.
+// Product-specific warnings and cautions must be observed.
+// For the latest version of our data sheets and documentations visit our website (www.beckhoff.de).
+
+// © Beckhoff Automation GmbH & Co. KG, December 2023
+
+// The reproduction, distribution and utilization of this document as well as the communication
+// of its contents to others without express authorization is prohibited. 
+// Offenders will be held liable for the payment of damages.
+// All rights reserved in the event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+// SAMPLE - OCR (Optical Character Recognition)
+//	-------------------------------------------------------
+
+// Steps To Do:
+// ------------
+// 1. Add the sample images to the FileSource1 Control
+// 2. Activate the Configuration -> Start TwinCAT System and PLC to run -> watch the results in the ADS Image Watch
+// 3. Switch between OCR standard and expert function with bUseExpFunction
+
+// Load OCR Model
+IF NOT bInitialized THEN
+	fbInit(eFunction := TCVN_IF_OCR, nOptions := ETcVnOcrModelType.TCVN_OMT_NUMBERS_SC_UCLETTERS OR ETcVnOcrModelType.TCVN_OMT_NUMBERS_SC OR ETcVnOcrModelType.TCVN_OMT_UCLETTERS, bStart := TRUE);
+	
+	IF NOT fbInit.bBusy THEN
+		fbInit(bStart := FALSE);
+		IF NOT fbInit.bError THEN
+			bInitialized := TRUE;
+			nReturnCode := fbInit.nErrorId AND 16#FFF;
+		ELSE
+			nReturnCode := fbInit.nErrorId AND 16#FFF;
+		END_IF
+	END_IF
+END_IF
+
+// Check if Model is initialized
+IF bCheck THEN
+	bCheck := FALSE;
+	hrCheck := F_VN_CheckFunctionInitialization(eFunction := TCVN_IF_OCR, nOptions := ETcVnOcrModelType.TCVN_OMT_NUMBERS_SC, hrPrev := S_OK);
+END_IF
+
+// Unload OCR Model
+IF bDeinitialize THEN
+	bDeinitialize := FALSE;
+	hrDeinitialize := F_VN_DeinitializeFunction(eFunction:= TCVN_IF_OCR, nOptions:= ETcVnOcrModelType.TCVN_OMT_NUMBERS_SC, hrPrev:= S_OK);
+	bInitialized := FALSE;
+END_IF
+
+// Get Camera State
+eCameraState := fbCameraControl.GetState();
+	
+// CameraControl is in error state, so try to reset the camera connection
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+
+// Camera not yet streaming
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN	
+	
+	hr := fbCameraControl.GetCurrentImageAndFileName(ipImage := ipOriginalImage, sFileName := sFileName, 80);
+	
+	IF bInitialized AND SUCCEEDED(hr) AND ipOriginalImage <> 0 THEN
+		
+		ImageCounter := ImageCounter + 1;
+		
+		// Check pixel format and prepare work image
+		hr := F_VN_GetPixelFormat(ipOriginalImage, stPixelFormat, hr);			
+		IF stPixelFormat.nChannels = 3 AND stPixelFormat.ePixelEncoding = TCVN_PE_NONE THEN
+			hr := F_VN_ConvertColorSpace(ipOriginalImage, ipBinaryImage, TCVN_CST_RGB_TO_GRAY, hr);			
+		ELSE
+			hr := F_VN_CopyImage(ipOriginalImage, ipBinaryImage, hr);
+		END_IF
+		
+		// Helper funtion to get ROI and threshold value according to sample image
+		F_GetROI(sFileName, stRoi, fThreshold, bInvertImage, sPattern);
+			 
+		// Set ROI and draw rectangle
+		hr := F_VN_SetRoi_TcVnRectangle_UDINT(stRoi, ipBinaryImage, hr);
+		hr := F_VN_DrawRectangle_TcVnRectangle_UDINT(stRoi, ipOriginalImage, aRedColor, 2, hr);
+		
+		// Filter Image 
+		// Add or replace pre-processing functions if needed
+		hr := F_VN_CreateStructuringElement(ipStructElem, ETcVnStructuringElementShape.TCVN_SES_RECTANGLE, 3,3, hr);
+		hr := F_VN_MorphologicalOperator(ipBinaryImage, ipBinaryImage, ETcvnMorphologicalOperator.TCVN_MO_OPENING, ipStructElem, hr);	
+		
+		// Invert image depending on bright or dark text color 
+		IF bInvertImage THEN
+			hr := F_VN_Threshold(ipBinaryImage, ipBinaryImage, fThreshold, 255, TCVN_TT_BINARY_INV, hr);
+		ELSE
+			hr := F_VN_Threshold(ipBinaryImage, ipBinaryImage, fThreshold, 255, TCVN_TT_BINARY, hr);
+		END_IF
+		
+		// Remove border objects
+		hr := F_VN_BrightBorderObjects(ipBinaryImage, ipThreshBorder, hr);
+		hr := F_VN_SubtractImages(ipBinaryImage, ipThreshBorder, ipBinaryImage, hr);
+	
+		// Read characters
+		IF NOT bUseExpFunction THEN
+			hrOCR := F_VN_OCR(
+					ipSrcImage		:= ipBinaryImage,
+					eModel			:= ETcVnOcrModelType.TCVN_OMT_NUMBERS_SC_UCLETTERS,
+					ipCharacters	:= ipOCRResult,
+					hrPrev			:= hr);
+		ELSE
+			hrOCR := F_VN_OCRExp(
+					ipSrcImage		:= ipBinaryImage,
+					eModel			:= ETcVnOcrModelType.TCVN_OMT_NUMBERS_SC or ETcVnOcrModelType.TCVN_OMT_UCLETTERS,
+					ipCharacters	:= ipOCRResult, 
+					sPattern		:= sPattern,
+					eOcrOptions		:= eOcrOptions,
+					ipBoundingBoxes	:= ipBoundingBoxes, 
+					ipConfidences	:= ipConfidences,
+					hrPrev			:= hr,
+					fMinConfidence	=> fMinConfidence);
+		END_IF
+				
+		// Check if characters were found
+		hr := F_VN_GetNumberOfElements(ipOCRResult, nNumberOfElements, hrOCR);
+		IF SUCCEEDED(hr) AND nNumberOfElements > 0 THEN
+			// Export character to string
+			hr := F_VN_ExportSubContainer_String(ipOCRResult, 0, sText, 255, hr);
+			nStringLenght := LEN(sText);
+			
+			// Write text result to filtered and original image
+			hr := F_VN_PutText(sText, ipBinaryImage, 12, 12, TCVN_FT_HERSHEY_PLAIN, 1, aWhiteColor, hr);
+			hr := F_VN_PutText(sText, ipOriginalImage, stRoi.nX + 5, stRoi.nY + 25, TCVN_FT_HERSHEY_DUPLEX, 1, aGreenColor, hr);
+			
+			IF bUseExpFunction THEN 
+				// Get number of Confidence elements and export them if array is large enough 
+				MEMSET(ADR(aConfidences), 0, SIZEOF(aConfidences));
+				hr := F_VN_GetNumberOfElements(ipConfidences, nNumberOfElements, hr);
+				
+				// Check if number of elements fits to array size
+				IF nNumberOfElements > 0 AND nNumberOfElements <= 12 THEN
+					hr := F_VN_ExportContainer(ipConfidences, ADR(aConfidences), SIZEOF(aConfidences), hr);
+				END_IF
+				
+				// Get bounding box rectangle and draw it to filtered and original image
+				hr := F_VN_GetNumberOfElements(ipBoundingBoxes, nNumberOfElements, hr);
+				IF nNumberOfElements > 0 THEN
+					FOR nIterator := 0 TO nNumberOfElements -1 DO
+						hr := F_VN_GetAt_TcVnRectangle_DINT(ipBoundingBoxes, stRectangle, nIterator, hr);
+						hr := F_VN_DrawRectangle_TcVnRectangle_DINT(stRectangle, ipBinaryImage, aWhiteColor, 1, hr);
+						// Add ROI Offset
+						stRectangle.nX := stRectangle.nX + UDINT_TO_DINT(stRoi.nX);
+						stRectangle.nY := stRectangle.nY + UDINT_TO_DINT(stRoi.nY);
+						hr := F_VN_DrawRectangle_TcVnRectangle_DINT(stRectangle, ipOriginalImage, aBlueColor, 1, hr);
+					END_FOR
+				END_IF
+			END_IF
+		END_IF
+		
+		// Display images
+		hr := F_VN_TransformIntoDisplayableImage(ipOriginalImage, ipOriginImageDisp, S_OK);
+		hr := F_VN_TransformIntoDisplayableImage(ipBinaryImage, ipBinImageDisp, S_OK);
+		hr := F_VN_TransformIntoDisplayableImage(ipThreshBorder, ipThreshBorderDisp, S_OK);
+		
+		// Release Pointer
+		hr := FW_SafeRelease(ADR(ipOCRResult));
+		hr := FW_SafeRelease(ADR(ipBoundingBoxes));
+		hr := FW_SafeRelease(ADR(ipConfidences));
+	END_IF
+END_IF
+	]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="857" Count="24" />
+      <LineId Id="604" Count="9" />
+      <LineId Id="577" Count="0" />
+      <LineId Id="803" Count="0" />
+      <LineId Id="615" Count="0" />
+      <LineId Id="263" Count="0" />
+      <LineId Id="36" Count="1" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="38" Count="1" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="304" Count="0" />
+      <LineId Id="259" Count="2" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="570" Count="0" />
+      <LineId Id="566" Count="0" />
+      <LineId Id="565" Count="0" />
+      <LineId Id="567" Count="0" />
+      <LineId Id="571" Count="0" />
+      <LineId Id="568" Count="0" />
+      <LineId Id="556" Count="0" />
+      <LineId Id="551" Count="0" />
+      <LineId Id="485" Count="0" />
+      <LineId Id="554" Count="0" />
+      <LineId Id="493" Count="0" />
+      <LineId Id="563" Count="0" />
+      <LineId Id="486" Count="0" />
+      <LineId Id="264" Count="0" />
+      <LineId Id="44" Count="12" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="142" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="692" Count="0" />
+      <LineId Id="327" Count="0" />
+      <LineId Id="321" Count="0" />
+      <LineId Id="287" Count="0" />
+      <LineId Id="59" Count="2" />
+      <LineId Id="70" Count="2" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="546" Count="0" />
+      <LineId Id="544" Count="0" />
+      <LineId Id="499" Count="0" />
+      <LineId Id="253" Count="0" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="209" Count="0" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="254" Count="0" />
+      <LineId Id="990" Count="0" />
+      <LineId Id="74" Count="1" />
+      <LineId Id="989" Count="0" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="632" Count="0" />
+      <LineId Id="627" Count="0" />
+      <LineId Id="622" Count="0" />
+      <LineId Id="626" Count="0" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="690" Count="0" />
+      <LineId Id="689" Count="0" />
+      <LineId Id="687" Count="1" />
+      <LineId Id="633" Count="0" />
+      <LineId Id="215" Count="0" />
+      <LineId Id="558" Count="0" />
+      <LineId Id="418" Count="0" />
+      <LineId Id="473" Count="3" />
+      <LineId Id="492" Count="0" />
+      <LineId Id="421" Count="8" />
+      <LineId Id="419" Count="0" />
+      <LineId Id="559" Count="0" />
+      <LineId Id="356" Count="0" />
+      <LineId Id="620" Count="0" />
+      <LineId Id="617" Count="1" />
+      <LineId Id="431" Count="0" />
+      <LineId Id="462" Count="0" />
+      <LineId Id="575" Count="0" />
+      <LineId Id="465" Count="0" />
+      <LineId Id="464" Count="0" />
+      <LineId Id="463" Count="0" />
+      <LineId Id="430" Count="0" />
+      <LineId Id="432" Count="0" />
+      <LineId Id="560" Count="0" />
+      <LineId Id="468" Count="0" />
+      <LineId Id="367" Count="0" />
+      <LineId Id="470" Count="0" />
+      <LineId Id="935" Count="0" />
+      <LineId Id="572" Count="0" />
+      <LineId Id="746" Count="0" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="329" Count="0" />
+      <LineId Id="472" Count="0" />
+      <LineId Id="290" Count="0" />
+      <LineId Id="451" Count="0" />
+      <LineId Id="747" Count="0" />
+      <LineId Id="440" Count="0" />
+      <LineId Id="370" Count="0" />
+      <LineId Id="434" Count="0" />
+      <LineId Id="562" Count="0" />
+      <LineId Id="441" Count="1" />
+      <LineId Id="439" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="748" Count="0" />
+      <LineId Id="561" Count="0" />
+      <LineId Id="619" Count="0" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="257" Count="0" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="453" Count="0" />
+      <LineId Id="482" Count="0" />
+      <LineId Id="160" Count="0" />
+      <LineId Id="478" Count="1" />
+      <LineId Id="98" Count="1" />
+      <LineId Id="102" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

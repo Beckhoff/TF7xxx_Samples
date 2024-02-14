@@ -1,0 +1,362 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MAIN" Id="{46566c8a-13fb-4c5d-9fb3-4ecbdd608334}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	stExtractionParams		:	ST_ExtractionParams;	// Feature extraction options
+	stScalingParams			:	ST_ScalingParams;		// Feature scaling type and custom values
+	stTransformationParams	:	ST_TransformationParams;// Transformation type and parameters
+	
+	bResetTrainingData		:	BOOL;					// Reset the sample features to get new onces
+	bResetScaling			:	BOOL;					// Reset the feature scaling to get new onces and visualize the result
+	bResetModel				:	BOOL;					// Reset model to start a new transformation with a changed model or parameters
+	nSelectedFeatureID		:	UDINT;					// ID of the feature in the vector that should be visualized
+	bVisualizeFeatures		:	BOOL;					// Create new feature visualization image
+	
+	hr						:	HRESULT;
+	hrLastExecution			:	HRESULT;
+	ipImageResDisp			:	ITcVnDisplayableImage;
+	fbTrainingDataHandler	:	FB_TrainingDataHandler;
+
+	ipTransformationModel	:	ITcVnMlModel;
+	ipSamplesTraining		:	ITcVnContainer;
+	ipClassLabels			:	ITcVnContainer;
+	ipFeatureScaling		:	ITcVnContainer;
+	ipScaledSamples			:	ITcVnContainer;
+	ipTransformedSamples	:	ITcVnContainer;
+	
+	nNumberOfSamples		:	ULINT;
+	nNumberOfFeatures		:	ULINT;
+	nNumberOfCustomScales	:	ULINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Disclaimer
+
+// This publication contains statements about the suitability of our products for certain
+// areas of application. These statements are based on typical features of our products.
+// The examples shown in this publication are for demonstration purposes only.
+// The information provided herein should not be regarded as specific operation characteristics.
+// It is incumbent on the customer to check and decide whether a product is suitable for use
+// in a particular application. We do not give any warranty that the source code which is
+// made available with this publication is complete or accurate.
+
+// THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND,
+// EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY WITH RESPECT TO NON-INFRINGEMENT,
+// FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR FITNESS FOR ANY PARTICULAR PURPOSE.
+
+// This publication may be changed from time to time without prior notice.
+// No liability is assumed for errors and/or omissions.
+// Our products are described in detail in our data sheets and documentations.
+// Product-specific warnings and cautions must be observed.
+// For the latest version of our data sheets and documentations visit our website (www.beckhoff.de).
+
+// © Beckhoff Automation GmbH & Co. KG, June 2023
+
+// The reproduction, distribution and utilization of this document as well as the communication
+// of its contents to others without express authorization is prohibited. 
+// Offenders will be held liable for the payment of damages.
+// All rights reserved in the event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+// SAMPLE - Machine Learning Feature Preprocessing
+//	-------------------------------------------------------
+
+// Steps To Do:
+// ------------
+// 1. Add the training images to the TrainingImages control
+// 2. Activate the configuration -> Start TwinCAT system and PLC to run -> see the result in the ADS Image Watch
+// 3. Change stExtractionParams to change the feature that are extraced by F_ExtractFeatures or the function parameters
+// 4. Change stScalingParams or stTransformationParams to change the feature scaling or the transformation model
+// 5. Set bResetTrainingData to get new training data if images or feature extraction changed
+// 6. Set bResetScaling to get new feature scaling if stScalingParams changed
+// 7. Set bResetModel to get new transformation model if the model type or parameters changed
+// 8. Set nSelectedFeatureID to a feature index that should bei visualized
+// 9. Set bVisualizeFeatures to update the visualization image
+
+// Reset return value
+hr := S_OK;
+
+// Reset the trained features to get new ones
+IF bResetTrainingData THEN
+	bResetTrainingData := FALSE;
+	bVisualizeFeatures := TRUE;
+	fbTrainingDataHandler.Reset();
+	FW_SafeRelease(ADR(ipSamplesTraining));
+	FW_SafeRelease(ADR(ipClassLabels));
+	FW_SafeRelease(ADR(ipFeatureScaling));
+	FW_SafeRelease(ADR(ipScaledSamples));
+	FW_SafeRelease(ADR(ipTransformationModel));
+END_IF
+
+// Get sample data for feature preprocessing
+fbTrainingDataHandler(stExtractionParams := stExtractionParams);
+IF ipSamplesTraining = 0 AND ipClassLabels = 0 THEN
+	hr := fbTrainingDataHandler.GetTrainingData(ipSamplesTraining, ipClassLabels);
+END_IF
+
+// Reset to get new scaling with changed type or parameters
+IF bResetScaling THEN
+	bResetScaling := FALSE;
+	bVisualizeFeatures := TRUE;
+	FW_SafeRelease(ADR(ipFeatureScaling));
+	FW_SafeRelease(ADR(ipScaledSamples));
+	FW_SafeRelease(ADR(ipTransformationModel));
+END_IF
+
+// Feature scaling
+IF SUCCEEDED(hr) AND ipSamplesTraining <> 0 AND ipScaledSamples = 0 THEN
+	// Get or create scaling
+	CASE stScalingParams.eScalingType OF
+		E_FeatureScalingType.MAXABS:
+			hr := F_VN_GetFeatureScales(ipSamplesTraining, ipFeatureScaling, TCVN_FST1_MAXABS, hr);
+			
+		E_FeatureScalingType.MINMAX, E_FeatureScalingType.MINMAX_EXP:
+			hr := F_VN_GetFeatureScales(ipSamplesTraining, ipFeatureScaling, TCVN_FST1_MINMAX, hr);
+			
+		E_FeatureScalingType.STANDARDIZATION:
+			hr := F_VN_GetFeatureScales(ipSamplesTraining, ipFeatureScaling, TCVN_FST1_STANDARDIZATION, hr);
+			
+		E_FeatureScalingType.CUSTOM:
+			// Structure of the scaling container
+			// The first element of the ipScales container contains the value of ETcVnFeatureScalingType.
+			// For MAXABS this is followed by 1 positive scaling value per feature to get scaled values between [-1..1].
+			// For MINMAX and STANDARDIZATION there are 2 scaling values per feature.
+			// For MINMAX the min and max values follow for each feature to get scaled values between [0..1].
+			// For STANDARDIZATION the mean and standard deviations values follow for each feature to get scaled values wih mean = 0 and std = 1.
+			
+			// Custom scaling
+			// To create a custom scaling first the eFeatureScalingType must be written into the stScalingParams.aCustomScaling[0] of the array.
+			// After that the other array elements must be filled according to the chosen scaling type.
+			// Finally select the stScalingParams.eScalingType = CUSTOM and start the creation of the custom scaling with bResetScaling.
+			
+			// Get the number of samples and features
+			hr := F_GetNumberOfFeatures(ipTransformedSamples, nNumberOfSamples, nNumberOfFeatures, hr);
+			
+			// Check the scaling type and compare the array length with the number of features 
+			CASE LREAL_TO_DINT(stScalingParams.aCustomScaling[0]) OF
+				
+				TCVN_FST1_MAXABS:
+					IF SIZEOF(stScalingParams.aCustomScaling) / SIZEOF(LREAL) < nNumberOfFeatures + 1 THEN
+						hr := Tc2_System.E_HRESULTAdsErr.INVALIDSIZE;
+					ELSE
+						nNumberOfCustomScales := nNumberOfFeatures + 1;
+					END_IF
+					
+				TCVN_FST1_MINMAX, TCVN_FST1_STANDARDIZATION:
+					IF SIZEOF(stScalingParams.aCustomScaling) / SIZEOF(LREAL) < (nNumberOfFeatures * 2) + 1 THEN
+						hr := Tc2_System.E_HRESULTAdsErr.INVALIDSIZE;
+					ELSE
+						nNumberOfCustomScales := (nNumberOfFeatures * 2) + 1;
+					END_IF
+			ELSE
+				hr := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+			END_CASE
+
+			// Create container with custom scaling values
+			hr := F_VN_CreateContainerFromArray(ADR(stScalingParams.aCustomScaling), ipFeatureScaling, ContainerType_Vector_LREAL, nNumberOfCustomScales, hr);
+	END_CASE
+
+	IF stScalingParams.eScalingType = E_FeatureScalingType.NONE THEN
+		// Copy container for no scaling
+		FW_SafeRelease(ADR(ipScaledSamples));
+		hr := F_VN_CopyContainer(ipSamplesTraining, ipScaledSamples, hr);
+		
+	ELSIF stScalingParams.eScalingType = E_FeatureScalingType.MINMAX_EXP THEN
+		// Apply scaling with custom output range
+		hr := F_VN_FeatureScalingExp(ipSamplesTraining, ipFeatureScaling, ipScaledSamples, 0.1, 0.9, hr);
+	ELSE
+		// Apply scaling
+		hr := F_VN_FeatureScaling(ipSamplesTraining, ipFeatureScaling, ipScaledSamples, hr);
+	END_IF
+	
+	hrLastExecution := hr;
+	bVisualizeFeatures := TRUE;
+END_IF
+
+// Retrain with changed model or parameters
+IF bResetModel THEN
+	bResetModel := FALSE;
+	bVisualizeFeatures := TRUE;
+	FW_SafeRelease(ADR(ipTransformationModel));
+END_IF
+
+// Feature transformation model
+// Note: For LDA-based feature transformation, the number of training samples must be greater than or equal to the number of features.
+IF SUCCEEDED(hr) AND stTransformationParams.eTransformType > E_TransformationType.NONE AND ipScaledSamples <> 0 AND ipTransformationModel = 0 THEN
+	// Create the model
+	CASE stTransformationParams.eTransformType OF	
+		E_TransformationType.PCA:
+			hr := F_VN_CreatePcaTransform(ipTransformationModel, ipScaledSamples, hr);
+			
+		E_TransformationType.PCA_N_Components:
+			hr := F_VN_CreatePcaTransformViaComponentNum(ipTransformationModel, ipScaledSamples, stTransformationParams.nPcaComponentNum, hr);
+			
+		E_TransformationType.PCA_VARIANCE:
+			hr := F_VN_CreatePcaTransformViaVariance(ipTransformationModel, ipScaledSamples, stTransformationParams.fPcaRetainedVariance, hr);
+			
+		E_TransformationType.LDA:
+			hr := F_VN_CreateLdaTransform(ipTransformationModel, ipScaledSamples, ipClassLabels, hr);
+			
+		E_TransformationType.LDA_N_Components:
+			hr := F_VN_CreateLdaTransformViaComponentNum(ipTransformationModel, ipScaledSamples, ipClassLabels, stTransformationParams.nLdaComponentNum, hr);
+	END_CASE;
+	
+	hrLastExecution := hr;
+	bVisualizeFeatures := TRUE;
+END_IF
+
+// Feature transformation and visualization
+IF SUCCEEDED(hr) AND ipScaledSamples <> 0 AND bVisualizeFeatures THEN
+	bVisualizeFeatures := FALSE;
+	
+	IF stTransformationParams.eTransformType = E_TransformationType.NONE THEN
+		// Copy container for no transformation
+		FW_SafeRelease(ADR(ipTransformedSamples));
+		hr := F_VN_CopyContainer(ipScaledSamples, ipTransformedSamples, hr);
+	ELSE
+		// Execute the feature transformation
+		hr := F_VN_FeatureTransform(ipTransformationModel, ipScaledSamples, ADR(ipTransformedSamples), hr);
+	END_IF
+
+	// Get the number of samples and features
+	hr := F_GetNumberOfFeatures(ipTransformedSamples, nNumberOfSamples, nNumberOfFeatures, hr);
+	// Limit the ID to valid number
+	nSelectedFeatureID := MIN(nSelectedFeatureID, ULINT_TO_UDINT(nNumberOfFeatures - 1));
+		
+	// Create a visualization image
+	hr := F_VisualizeFeatures(ipTransformedSamples, nSelectedFeatureID, ipClassLabels, 600, 300, ipImageResDisp, hr);
+	hrLastExecution := hr;
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="622" Count="1" />
+      <LineId Id="1173" Count="23" />
+      <LineId Id="649" Count="8" />
+      <LineId Id="659" Count="0" />
+      <LineId Id="1144" Count="0" />
+      <LineId Id="660" Count="0" />
+      <LineId Id="662" Count="0" />
+      <LineId Id="1122" Count="0" />
+      <LineId Id="1124" Count="0" />
+      <LineId Id="1127" Count="0" />
+      <LineId Id="1125" Count="0" />
+      <LineId Id="663" Count="6" />
+      <LineId Id="1308" Count="0" />
+      <LineId Id="670" Count="1" />
+      <LineId Id="675" Count="0" />
+      <LineId Id="912" Count="0" />
+      <LineId Id="825" Count="0" />
+      <LineId Id="784" Count="0" />
+      <LineId Id="676" Count="5" />
+      <LineId Id="683" Count="0" />
+      <LineId Id="821" Count="0" />
+      <LineId Id="845" Count="2" />
+      <LineId Id="1307" Count="0" />
+      <LineId Id="913" Count="0" />
+      <LineId Id="848" Count="0" />
+      <LineId Id="851" Count="0" />
+      <LineId Id="836" Count="0" />
+      <LineId Id="849" Count="0" />
+      <LineId Id="796" Count="0" />
+      <LineId Id="822" Count="0" />
+      <LineId Id="900" Count="0" />
+      <LineId Id="797" Count="2" />
+      <LineId Id="826" Count="0" />
+      <LineId Id="800" Count="0" />
+      <LineId Id="1272" Count="0" />
+      <LineId Id="1062" Count="0" />
+      <LineId Id="802" Count="1" />
+      <LineId Id="1063" Count="0" />
+      <LineId Id="804" Count="0" />
+      <LineId Id="1130" Count="0" />
+      <LineId Id="1020" Count="0" />
+      <LineId Id="1024" Count="0" />
+      <LineId Id="1023" Count="0" />
+      <LineId Id="1225" Count="0" />
+      <LineId Id="1129" Count="0" />
+      <LineId Id="1137" Count="1" />
+      <LineId Id="1135" Count="1" />
+      <LineId Id="1139" Count="0" />
+      <LineId Id="1021" Count="0" />
+      <LineId Id="1074" Count="0" />
+      <LineId Id="806" Count="0" />
+      <LineId Id="1085" Count="0" />
+      <LineId Id="1082" Count="0" />
+      <LineId Id="807" Count="0" />
+      <LineId Id="1086" Count="0" />
+      <LineId Id="808" Count="2" />
+      <LineId Id="1077" Count="0" />
+      <LineId Id="1090" Count="0" />
+      <LineId Id="811" Count="0" />
+      <LineId Id="1083" Count="0" />
+      <LineId Id="812" Count="1" />
+      <LineId Id="1079" Count="1" />
+      <LineId Id="814" Count="4" />
+      <LineId Id="1084" Count="0" />
+      <LineId Id="1070" Count="0" />
+      <LineId Id="820" Count="0" />
+      <LineId Id="795" Count="0" />
+      <LineId Id="897" Count="0" />
+      <LineId Id="901" Count="0" />
+      <LineId Id="906" Count="1" />
+      <LineId Id="902" Count="0" />
+      <LineId Id="1277" Count="0" />
+      <LineId Id="904" Count="0" />
+      <LineId Id="1275" Count="0" />
+      <LineId Id="1273" Count="1" />
+      <LineId Id="909" Count="0" />
+      <LineId Id="1264" Count="0" />
+      <LineId Id="1011" Count="0" />
+      <LineId Id="1140" Count="0" />
+      <LineId Id="899" Count="0" />
+      <LineId Id="874" Count="0" />
+      <LineId Id="739" Count="0" />
+      <LineId Id="838" Count="3" />
+      <LineId Id="1306" Count="0" />
+      <LineId Id="842" Count="0" />
+      <LineId Id="823" Count="0" />
+      <LineId Id="844" Count="0" />
+      <LineId Id="741" Count="0" />
+      <LineId Id="1337" Count="0" />
+      <LineId Id="785" Count="0" />
+      <LineId Id="787" Count="0" />
+      <LineId Id="771" Count="2" />
+      <LineId Id="789" Count="0" />
+      <LineId Id="774" Count="1" />
+      <LineId Id="790" Count="0" />
+      <LineId Id="776" Count="1" />
+      <LineId Id="791" Count="0" />
+      <LineId Id="778" Count="1" />
+      <LineId Id="792" Count="0" />
+      <LineId Id="780" Count="1" />
+      <LineId Id="770" Count="0" />
+      <LineId Id="1141" Count="0" />
+      <LineId Id="944" Count="0" />
+      <LineId Id="873" Count="0" />
+      <LineId Id="782" Count="0" />
+      <LineId Id="977" Count="0" />
+      <LineId Id="700" Count="1" />
+      <LineId Id="719" Count="0" />
+      <LineId Id="973" Count="0" />
+      <LineId Id="867" Count="0" />
+      <LineId Id="970" Count="1" />
+      <LineId Id="969" Count="0" />
+      <LineId Id="868" Count="0" />
+      <LineId Id="974" Count="0" />
+      <LineId Id="872" Count="0" />
+      <LineId Id="870" Count="0" />
+      <LineId Id="1068" Count="0" />
+      <LineId Id="1064" Count="1" />
+      <LineId Id="976" Count="0" />
+      <LineId Id="1066" Count="1" />
+      <LineId Id="975" Count="0" />
+      <LineId Id="960" Count="0" />
+      <LineId Id="945" Count="0" />
+      <LineId Id="698" Count="0" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

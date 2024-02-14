@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="E_TransformationType" Id="{354dfd07-ee57-4953-a2d9-0a0e6c4e03d3}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_TransformationType :
+(
+	NONE := 0,
+	PCA,
+	PCA_N_Components,
+	PCA_Variance,
+	LDA,
+	LDA_N_Components
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,238 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MAIN" Id="{5dd14c66-3f86-4b69-ab4a-f50f7c931421}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	eClusteringType		:	E_ClusteringType;		// Clustering type
+	stParams			:	ST_ClusteringParams;	// Clustering parameters
+	bResetModel			:	BOOL;					// Reset model to start a new training with a changed model or parameters
+	bResetTrainingData	:	BOOL;					// Reset the trained features to get new ones and train model
+	eTrainedModelType	: 	E_ClusteringType;
+	
+	hrTrain				:	HRESULT;
+	hrTest				:	HRESULT;
+	
+	ipImageTest			:	ITcVnImage;
+	ipImageResDisp		:	ITcVnDisplayableImage;
+	
+	eCameraState		:	ETcVnCameraState;	
+	fbCameraTest		:	FB_VN_SimpleCameraControl;
+	
+	fbTrainingDataHandler:	FB_TrainingDataHandler;
+	
+	ipClustererModel	:	ITcVnMlModel;
+	ipSamplesTraining	:	ITcVnContainer;
+	ipFeatureScaling	:	ITcVnContainer;
+	ipSampleTest		:	ITcVnContainer;
+	nCluster			:	DINT;
+	fNovelty			:	REAL;
+	
+	// Result
+	sLabel				:	STRING(255);
+	aGreen				:	TcVnVector4_LREAL := [0, 255, 0];
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Disclaimer
+
+// This publication contains statements about the suitability of our products for certain
+// areas of application. These statements are based on typical features of our products.
+// The examples shown in this publication are for demonstration purposes only.
+// The information provided herein should not be regarded as specific operation characteristics.
+// It is incumbent on the customer to check and decide whether a product is suitable for use
+// in a particular application. We do not give any warranty that the source code which is
+// made available with this publication is complete or accurate.
+
+// THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND,
+// EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY WITH RESPECT TO NON-INFRINGEMENT,
+// FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR FITNESS FOR ANY PARTICULAR PURPOSE.
+
+// This publication may be changed from time to time without prior notice.
+// No liability is assumed for errors and/or omissions.
+// Our products are described in detail in our data sheets and documentations.
+// Product-specific warnings and cautions must be observed.
+// For the latest version of our data sheets and documentations visit our website (www.beckhoff.de).
+
+// © Beckhoff Automation GmbH & Co. KG, December 2023
+
+// The reproduction, distribution and utilization of this document as well as the communication
+// of its contents to others without express authorization is prohibited. 
+// Offenders will be held liable for the payment of damages.
+// All rights reserved in the event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+// SAMPLE - Machine Learning Clustering
+//	-------------------------------------------------------
+
+// Steps To Do:
+// ------------
+// 1. Add the training images to the TrainingImages control
+// 2. Add the test images to the TestingImages control
+// 3. Activate the configuration -> Start TwinCAT system and PLC to run -> watch the results in the ADS Image Watch
+// 4. Change eClusteringType and stParams to change the model or settings
+// 5. Set bResetModel to start create a new model and start training
+//    Note: If you change to eClassifierType = STA or from this type to another, a bResetTrainingData is automatically performed due to the different scaling of the training data.
+// 6. Set bResetTrainingData to get new training data if images or feature extraction changed
+
+// Reset the trained features to get new ones and train model
+IF bResetTrainingData
+	OR (eTrainedModelType <> E_ClusteringType.STA AND eClusteringType = E_ClusteringType.STA)
+	OR (eTrainedModelType = E_ClusteringType.STA AND eClusteringType <> E_ClusteringType.STA) THEN
+	
+	bResetTrainingData := FALSE;
+	fbTrainingDataHandler.Reset();
+	FW_SafeRelease(ADR(ipSamplesTraining));
+	FW_SafeRelease(ADR(ipFeatureScaling));
+	FW_SafeRelease(ADR(ipClustererModel));
+	eTrainedModelType := eClusteringType;
+	// Reset return value
+	hrTrain := S_OK;
+END_IF
+
+// Get sample data for training
+fbTrainingDataHandler(eClusteringType := eClusteringType);
+IF ipSamplesTraining = 0 AND ipFeatureScaling = 0 THEN
+	hrTrain := fbTrainingDataHandler.GetTrainingData(ipSamplesTraining, ipFeatureScaling);
+END_IF
+
+// Retrain with changed model or parameters
+IF bResetModel THEN
+	bResetModel := FALSE;
+	FW_SafeRelease(ADR(ipClustererModel));
+	eTrainedModelType := eClusteringType;
+	// Reset return value
+	hrTrain := S_OK;
+END_IF
+
+IF SUCCEEDED(hrTrain) AND ipSamplesTraining <> 0 AND ipClustererModel = 0 THEN
+	
+	// Create the model
+	CASE eClusteringType OF
+		
+		E_ClusteringType.KMPP:
+			hrTrain := F_VN_CreateKmppModelExp(
+							ipMlModel			:=	ipClustererModel,
+							eKmppType			:=	TCVN_PC_CLUSTERER,
+							nK					:=	stParams.nKmppK,
+							bDoublePrecision	:=	stParams.bKmppDoublePrecision,
+							nMaxIterations		:=	stParams.nKmppMaxiterations,
+							fEpsilon			:=	stParams.fKmppEpsilon,
+							hrPrev				:=	hrTrain);
+
+		E_ClusteringType.LBG:
+			hrTrain := F_VN_CreateLbgModelExp(
+							ipMlModel			:=	ipClustererModel,
+							eLbgType			:=	TCVN_PC_CLUSTERER,
+							nMaxClusters		:=	stParams.nLbgMaxClusters,
+							fMaxClusterRadius	:=	stParams.fLbgMaxClusterRadius,
+							bSingleSplitSteps	:=	stParams.bLbgSingleSplitSteps,
+							bDoublePrecision	:=	stParams.bLbgDoublePrecision,
+							nMaxiterations		:=	stParams.nLbgMaxIterations,
+							fEpsilon			:=	stParams.fLbgEpsilon,
+							hrPrev				:=	hrTrain);
+
+		E_ClusteringType.STA:
+			hrTrain := F_VN_CreateStaModelExp2(
+							ipMlModel           :=	ipClustererModel,
+							eStaType            :=	TCVN_STA_CLUSTERER,
+							fRho                :=	stParams.fStaRho,
+							nNu                 :=	stParams.nStaNu,
+							bDoublePrecision    :=	stParams.bStaDoublePrecision,
+							fBetaSbm			:=	stParams.fStaBetaSbm, 
+							nPhi				:=	stParams.nStaPhi, 
+							nTau				:=	stParams.nStaTau, 
+							hrPrev				:=	hrTrain); 
+							
+	END_CASE
+	
+	// Train model
+	hrTrain := F_VN_TrainBatchClusters(
+							ipClusterer	:=  ipClustererModel,
+							ipSamples	:=  ipSamplesTraining,
+							ipClusters	:=  0,
+							hrPrev		:=  hrTrain);
+
+END_IF
+
+// Get test images
+eCameraState := fbCameraTest.GetState();
+
+IF eCameraState = TCVN_CS_ERROR THEN
+	hrTest := fbCameraTest.Reset();
+
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hrTest := fbCameraTest.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hrTest := fbCameraTest.GetCurrentImage(ipImageTest);
+
+	// Check if new image was received
+	IF SUCCEEDED(hrTest) AND ipImageTest <> 0 THEN
+
+        IF ipClustererModel <> 0 AND ipFeatureScaling <> 0 THEN
+			// Get features from sample image and scale 
+			hrTest := F_ExtractFeatures(ipImageTest, ipSampleTest, hrTest);
+			IF eClusteringType = E_ClusteringType.STA THEN
+				hrTest := F_VN_FeatureScalingExp(ipSampleTest, ipFeatureScaling, ipSampleTest, 0.1, 0.9, hrTest);
+			ELSE
+				hrTest := F_VN_FeatureScaling(ipSampleTest, ipFeatureScaling, ipSampleTest, hrTest);
+			END_IF
+			
+			// Get cluster result
+			hrTest := F_VN_GetSampleClusterExp(ipClustererModel, ipSampleTest, nCluster, fNovelty, hrTest);
+			
+			// Check the degree of novelty and write result
+			IF fNovelty <= 0.3 THEN
+				sLabel := CONCAT('Cluster: ',DINT_TO_STRING(nCluster));
+			ELSE
+				sLabel := 'Cluster: Unknown';
+			END_IF			
+			hrTest := F_VN_PutTextExp(sLabel, ipImageTest, 30, 60, TCVN_FT_HERSHEY_PLAIN, 4, aGreen, 2, TCVN_LT_ANTIALIASED, FALSE, hrTest);
+		END_IF
+		
+		// Display Image
+		hrTest := F_VN_TransformIntoDisplayableImage(ipImageTest, ipImageResDisp, S_OK);
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="35" Count="1" />
+      <LineId Id="363" Count="23" />
+      <LineId Id="62" Count="12" />
+      <LineId Id="417" Count="0" />
+      <LineId Id="75" Count="3" />
+      <LineId Id="504" Count="0" />
+      <LineId Id="503" Count="0" />
+      <LineId Id="505" Count="0" />
+      <LineId Id="79" Count="2" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="301" Count="0" />
+      <LineId Id="502" Count="0" />
+      <LineId Id="498" Count="0" />
+      <LineId Id="497" Count="0" />
+      <LineId Id="84" Count="11" />
+      <LineId Id="501" Count="0" />
+      <LineId Id="500" Count="0" />
+      <LineId Id="499" Count="0" />
+      <LineId Id="96" Count="3" />
+      <LineId Id="201" Count="23" />
+      <LineId Id="418" Count="1" />
+      <LineId Id="458" Count="8" />
+      <LineId Id="225" Count="0" />
+      <LineId Id="428" Count="0" />
+      <LineId Id="226" Count="7" />
+      <LineId Id="165" Count="21" />
+      <LineId Id="424" Count="3" />
+      <LineId Id="187" Count="2" />
+      <LineId Id="265" Count="0" />
+      <LineId Id="191" Count="0" />
+      <LineId Id="267" Count="4" />
+      <LineId Id="266" Count="0" />
+      <LineId Id="194" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

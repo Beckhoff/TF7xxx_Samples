@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_NoveltyDetectorParams" Id="{c46ba47b-cd3b-4f47-b69e-0730d1f6595b}">
+    <Declaration><![CDATA[TYPE ST_NoveltyDetectorParams :
+STRUCT
+	nKmppK					:	UDINT 				:=	2;
+	bKmppDoublePrecision	:	BOOL 				:=	FALSE;		// optional Exp parameter
+	nKmppMaxIterations		:	UDINT				:=	10;			// optional Exp parameter
+	fKmppEpsilon			:	LREAL				:=	0.001;		// optional Exp parameter
+	nKnnK					:	UDINT 				:=	1;
+	nLbgMaxClusters			:	UDINT				:=	5;
+	fLbgMaxClusterRadius	:	LREAL				:=	1.0;
+	bLbgSingleSplitSteps	:	BOOL				:=	TRUE;
+	bLbgDoublePrecision		:	BOOL				:=	FALSE;		// optional Exp parameter
+	nLbgMaxIterations		:	UDINT				:=	10;			// optional Exp parameter
+	fLbgEpsilon				:	LREAL				:=	0.001;		// optional Exp parameter
+	fStaRho	                :	LREAL				:=	0.73;
+	nStaNu	                :	UDINT				:=	5;			// optional Exp parameter
+	bStaDoublePrecision		:	BOOL				:=	TRUE;		// optional Exp parameter
+	fStaBetaSbm				:	LREAL				:=	0.0;		// optional Exp parameter
+	nStaPhi					:	UDINT				:=	1;			// optional Exp parameter
+	nStaTau					:	UDINT				:=	100;		// optional Exp parameter	
+	fSvmNu					:	LREAL				:=	0.4;		// 0.4 Apple or 0.5 Banane
+	eSvmKernelType			:	ETcVnSvmKernelType	:=	ETcVnSvmKernelType.TCVN_SKT_RBF;
+	fSvmGamma				:	LREAL				:=	0.000001;
+	fSvmCoef0				:	LREAL				:=	0;
+	fSvmDegree				:	LREAL				:=	0;
+	nSvmMaxIterations		:	UDINT				:=	100000;		// optional Exp parameter
+	fSvmEpsilon				:	LREAL				:=	0.0001;		// optional Exp parameter
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
   <POU Name="MAIN" Id="{0299139b-b432-4c74-a9fd-456412d8bef9}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
@@ -100,7 +100,6 @@ ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
 		hr := F_VN_GetImageHeight(ipImageTemplate, nHeight, hr);
 		hr := F_VN_GetImageWidth(ipImageTemplate, nWidth, hr);
 		
-		hr := F_VN_GetAt_TcVnPoint2_DINT(ipMatches, aPosition, 0, hr);
 		hr := F_VN_GetForwardIterator(ipMatches, ipIterator, hr);
 		IF SUCCEEDED(hr) AND ipIterator <> 0 THEN
 			hr := ipIterator.TcQueryInterface(IID_ITcVnAccess_TcVnPoint2_DINT, ADR(ipAccess));
@@ -109,15 +108,14 @@ ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
 				WHILE SUCCEEDED(hr) AND ipIterator.CheckIfEnd() <> S_OK DO
 					hr := ipAccess.Get(aPosition);
 					hr := F_VN_DrawRectangle(
-						DINT_TO_UDINT(aPosition[0]),
-						DINT_TO_UDINT(aPosition[1]),
-						DINT_TO_UDINT(aPosition[0])+nWidth,
-						DINT_TO_UDINT(aPosition[1])+nHeight,
-						ipImageRes,
-						aGreen,
-						5,
-						hr
-					);
+							DINT_TO_UDINT(aPosition[0]),
+							DINT_TO_UDINT(aPosition[1]),
+							DINT_TO_UDINT(aPosition[0]) + nWidth,
+							DINT_TO_UDINT(aPosition[1]) + nHeight,
+							ipImageRes,
+							aGreen,
+							5,
+							hr);
 					hr := F_VN_IncrementIterator(ipIterator, hr);
 				END_WHILE
 			END_IF
@@ -161,9 +159,11 @@ END_IF
     <LineIds Name="MAIN">
       <LineId Id="42" Count="52" />
       <LineId Id="131" Count="0" />
-      <LineId Id="95" Count="12" />
+      <LineId Id="95" Count="8" />
+      <LineId Id="105" Count="2" />
       <LineId Id="132" Count="0" />
-      <LineId Id="108" Count="22" />
+      <LineId Id="108" Count="11" />
+      <LineId Id="121" Count="9" />
       <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="MAIN.FileSource_TemplateImage">

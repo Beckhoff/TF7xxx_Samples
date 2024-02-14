@@ -1,0 +1,234 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="F_ExtractFeatures" Id="{5717acbc-5644-4482-8f4f-9baa52d9e83f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_ExtractFeatures : HRESULT
+VAR_INPUT
+	stExtractionParams	:	REFERENCE TO ST_ExtractionParams;
+	ipImage				:	ITcVnImage;
+	ipFeatures			:	REFERENCE TO ITcVnContainer;
+	hrPrev				:	HRESULT;
+END_VAR
+VAR
+	hr					:	HRESULT;
+	stImageInfo			:	TcVnImageInfo;
+	fChannelSize		:	LREAL;
+	ipImageWork 		:	ITcVnImage;
+	aAverage			:	TcVnVector4_LREAL;
+	stMoments			:	TcVnMoments;
+	ipDestHistogram		:	ITcVnContainer;
+	nBins				:	UDINT := 4;
+	fLowerBound			:	LREAL := 0;
+	fUpperBound			:	LREAL := 256;
+	ipHistChannel		:	ITcVnContainer;
+	nElement			:	UDINT;
+	ipImageBinary		:	ITcVnImage;
+	ipContourList		:	ITcVnContainer;
+	ipContour			:	ITcVnContainer;
+	ipIterator			:	ITcVnForwardIterator;
+	fArea				:	LREAL;
+	fMaxArea			:	LREAL;
+	nIndex				:	ULINT;
+	i					:	ULINT;
+	fCircularity		:	LREAL;
+	fConvexity			:	LREAL;
+	fPerimeter			:	LREAL;
+	fInertiaRatio		:	LREAL;
+	aHuInvariants		:	TcVnArray7_LREAL;
+	stRectangle			:	TcVnRotatedRectangle;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF FAILED(hrPrev) THEN
+	F_ExtractFeatures := hrPrev;
+	RETURN;
+END_IF
+
+IF ipImage = 0 THEN
+	F_ExtractFeatures := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+	RETURN;
+END_IF
+
+// Convert image from RGB to Gray if nessesary
+hr := F_VN_GetImageInfo(ipImage, stImageInfo, hr); 
+IF stImageInfo.stPixelFormat.nChannels = 3 AND stImageInfo.stPixelFormat.ePixelEncoding = TCVN_PE_NONE THEN
+	hr := F_VN_GetImageChannel(ipImage, ipImageWork, 0, hr);
+	fChannelSize := ULINT_TO_LREAL(stImageInfo.nImageSize) / 3;
+ELSE
+	ipImageWork := ipImage;
+	fChannelSize := ULINT_TO_LREAL(stImageInfo.nImageSize);
+	ipImage.TcAddRef();
+END_IF
+
+// Create feature vector container
+hr := F_VN_CreateContainer(ipFeatures, ContainerType_VECTOR_LREAL, 0, hr);
+
+// *** Image features ******************************************************************************
+IF stExtractionParams.bUseImageFeatures THEN
+	// Average intensity
+	hr := F_VN_ImageAverage(ipImage, aAverage, hr);
+	hr := F_VN_AppendToContainer_LREAL(aAverage[0], ipFeatures, hr);
+	hr := F_VN_AppendToContainer_LREAL(aAverage[1], ipFeatures, hr);
+	hr := F_VN_AppendToContainer_LREAL(aAverage[2], ipFeatures, hr);
+	
+	// Image moments
+	hr := F_VN_ImageMoments(ipImageWork, stMoments, FALSE, hr);
+	hr := F_VN_AppendToContainer_LREAL(stMoments.fMu02, ipFeatures, hr);
+	hr := F_VN_AppendToContainer_LREAL(stMoments.fMu20, ipFeatures, hr);
+	
+	// Histogramm 
+	hr := F_VN_HistogramExp(ipImage, ipDestHistogram, nBins, fLowerBound, fUpperBound, 0, hr);
+	// Get result of the first channel and scale with image size
+	hr := F_VN_GetAt_ITcVnContainer(ipDestHistogram, ipHistChannel, 0, hr);
+	hr := F_VN_GetAt_UDINT(ipHistChannel, nElement, 0, hr);
+	hr := F_VN_AppendToContainer_LREAL(UDINT_TO_LREAL(nElement) / fChannelSize, ipFeatures, hr);
+	hr := F_VN_GetAt_UDINT(ipHistChannel, nElement, 1, hr);
+	hr := F_VN_AppendToContainer_LREAL(UDINT_TO_LREAL(nElement) / fChannelSize, ipFeatures, hr);
+	hr := F_VN_GetAt_UDINT(ipHistChannel, nElement, 2, hr);
+	hr := F_VN_AppendToContainer_LREAL(UDINT_TO_LREAL(nElement) / fChannelSize, ipFeatures, hr);
+	hr := F_VN_GetAt_UDINT(ipHistChannel, nElement, 3, hr);
+	hr := F_VN_AppendToContainer_LREAL(UDINT_TO_LREAL(nElement) / fChannelSize, ipFeatures, hr);
+	
+ELSE
+// *** Contour features ****************************************************************************
+	hr := F_VN_Threshold(ipImageWork, ipImageBinary, stExtractionParams.fContourThreshold, 255, ETcVnThresholdType.TCVN_TT_BINARY, hr);
+	hr := F_VN_FindContours(ipImageBinary, ipContourList, hr);
+	hr := F_VN_TransformIntoDisplayableImage(ipImageBinary, stExtractionParams.ipImageBinaryDisp, S_OK);
+	
+	// Find the largest contour in the image
+	hr := F_VN_GetForwardIterator(ipContourList, ipIterator, hr);
+	WHILE SUCCEEDED(hr) AND_THEN ipIterator.CheckIfEnd() <> S_OK DO
+		hr := F_VN_GetContainerExp(ipIterator, ipContour, 1, hr);
+	
+		hr := F_VN_ContourArea(ipContour, fArea, hr);
+		IF fArea > fMaxArea THEN
+			// Get the value and index of the largest contour
+			fMaxArea := fArea;
+			nIndex := i;
+		END_IF
+		i := i + 1;
+	END_WHILE
+	
+	// Area
+	hr := F_VN_AppendToContainer_LREAL(fMaxArea, ipFeatures, hr);
+	
+	// Get container with the largest contour
+	hr := F_VN_GetAt_ITcVnContainer(ipContourList, ipContour, nIndex, hr);
+	
+	// Circularity
+	hr := F_VN_ContourCircularity(ipContour, fCircularity, hr);
+	hr := F_VN_AppendToContainer_LREAL(fCircularity, ipFeatures, hr);
+	
+	// Convexity
+	hr := F_VN_ContourConvexity(ipContour, fConvexity, hr);
+	hr := F_VN_AppendToContainer_LREAL(fConvexity, ipFeatures, hr);
+	
+	// Perimeter
+	hr := F_VN_ContourPerimeter(ipContour, fPerimeter, FALSE, hr);
+	hr := F_VN_AppendToContainer_LREAL(fPerimeter, ipFeatures, hr);
+	
+	// Contour moment invariants
+	hr := F_VN_ContourMoments(ipContour, stMoments, hr);
+	hr := F_VN_HuMomentInvariants(stMoments, aHuInvariants, hr);
+	hr := F_VN_AppendToContainer_LREAL(aHuInvariants[0], ipFeatures, hr);
+	hr := F_VN_AppendToContainer_LREAL(aHuInvariants[1], ipFeatures, hr);
+	
+	// Object width and height
+	hr := F_VN_EnclosingRectangle(ipContour, stRectangle, hr);
+	hr := F_VN_AppendToContainer_LREAL(stRectangle.stSize.fWidth, ipFeatures, hr);
+	hr := F_VN_AppendToContainer_LREAL(stRectangle.stSize.fHeight, ipFeatures, hr);
+END_IF
+
+// Release interface pointer
+hr := F_VN_TransformIntoDisplayableImage(ipImageWork, stExtractionParams.ipImageWorkDisp, S_OK);
+FW_SafeRelease(ADR(ipImageWork));
+FW_SafeRelease(ADR(ipImageBinary));
+FW_SafeRelease(ADR(ipDestHistogram));
+FW_SafeRelease(ADR(ipHistChannel));
+FW_SafeRelease(ADR(ipContourList));
+FW_SafeRelease(ADR(ipContour));
+FW_SafeRelease(ADR(ipIterator));
+
+F_ExtractFeatures := hr;]]></ST>
+    </Implementation>
+    <LineIds Name="F_ExtractFeatures">
+      <LineId Id="23" Count="8" />
+      <LineId Id="272" Count="0" />
+      <LineId Id="156" Count="2" />
+      <LineId Id="491" Count="0" />
+      <LineId Id="380" Count="0" />
+      <LineId Id="166" Count="1" />
+      <LineId Id="382" Count="0" />
+      <LineId Id="323" Count="0" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="160" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="535" Count="0" />
+      <LineId Id="534" Count="0" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="216" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="124" Count="2" />
+      <LineId Id="217" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="440" Count="0" />
+      <LineId Id="494" Count="0" />
+      <LineId Id="490" Count="0" />
+      <LineId Id="127" Count="1" />
+      <LineId Id="154" Count="0" />
+      <LineId Id="141" Count="1" />
+      <LineId Id="148" Count="5" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="536" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="169" Count="0" />
+      <LineId Id="546" Count="1" />
+      <LineId Id="185" Count="7" />
+      <LineId Id="195" Count="0" />
+      <LineId Id="202" Count="0" />
+      <LineId Id="196" Count="0" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="530" Count="0" />
+      <LineId Id="219" Count="0" />
+      <LineId Id="208" Count="0" />
+      <LineId Id="210" Count="0" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="512" Count="0" />
+      <LineId Id="220" Count="0" />
+      <LineId Id="212" Count="0" />
+      <LineId Id="509" Count="0" />
+      <LineId Id="513" Count="0" />
+      <LineId Id="511" Count="0" />
+      <LineId Id="223" Count="0" />
+      <LineId Id="506" Count="0" />
+      <LineId Id="515" Count="0" />
+      <LineId Id="505" Count="0" />
+      <LineId Id="224" Count="0" />
+      <LineId Id="500" Count="0" />
+      <LineId Id="517" Count="0" />
+      <LineId Id="499" Count="0" />
+      <LineId Id="225" Count="1" />
+      <LineId Id="528" Count="1" />
+      <LineId Id="495" Count="0" />
+      <LineId Id="470" Count="0" />
+      <LineId Id="242" Count="0" />
+      <LineId Id="476" Count="0" />
+      <LineId Id="497" Count="0" />
+      <LineId Id="519" Count="0" />
+      <LineId Id="207" Count="0" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="543" Count="0" />
+      <LineId Id="548" Count="1" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="181" Count="1" />
+      <LineId Id="199" Count="0" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

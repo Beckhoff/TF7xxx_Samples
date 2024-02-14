@@ -1,0 +1,179 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_TrainingDataHandler" Id="{c30f1c8f-d13b-450b-99da-a2d48cbaff00}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK PUBLIC FB_TrainingDataHandler
+VAR_INPUT
+	eRegressorType 		: E_RegressorType;	
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	hr					: HRESULT;
+	eCameraState		: ETcVnCameraState;
+	fbCameraTraining	: FB_VN_SimpleCameraControl;	
+	ipImageTraining		: ITcVnImage;
+	ipImageTrainingDisp	: ITcVnDisplayableImage;
+	bTrigger			: BOOL := TRUE;
+	sLabel				: STRING(255);
+	aGreen				: TcVnVector4_LREAL := [0, 255, 0];
+	
+	// Image Info
+	nImagesTotal		: UDINT := 22;
+	nImagesLoaded		: UDINT := 0;
+	
+	ipFeatures			: ITcVnContainer;
+	ipImageFeatures		: ITcVnContainer;
+	ipLabels			: ITcVnContainer;
+	ipStaResultScaling	: ITcVnContainer;
+	ipScales			: ITcVnContainer;
+	ipScaledFeatures	: ITcVnContainer;
+	
+	// The measured distance between the camera and the object in each image in cm
+	aGroundTruth		: ARRAY [0..21] OF LREAL := [17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59];
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Initialize container
+IF ipImageFeatures = 0 THEN
+	hr := F_VN_CreateContainer(ipImageFeatures, ContainerType_Vector_Vector_LREAL, nImagesTotal, hr);
+	hr := F_VN_CreateContainerFromArray(ADR(aGroundTruth), ipLabels, ContainerType_Vector_LREAL, 22, hr);
+END_IF
+
+// Get training images
+eCameraState := fbCameraTraining.GetState();
+
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraTraining.Reset();
+	
+// Camera trigger image
+ELSIF eCameraState = TCVN_CS_TRIGGERING THEN
+	hr := fbCameraTraining.TriggerImage();
+	
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraTraining.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+
+	IF bTrigger THEN
+		hr := fbCameraTraining.TriggerImage();
+		IF SUCCEEDED(hr) THEN
+			bTrigger := FALSE;
+		END_IF
+	ELSE
+		hr := fbCameraTraining.GetCurrentImage(ipImageTraining);
+
+		// Check if new image was received
+		IF SUCCEEDED(hr) AND ipImageTraining <> 0 THEN
+			
+			// Get features from training image 
+			hr := F_ExtractFeatures(ipImageTraining, ipFeatures, hr);
+			
+			// Add features to the container
+			hr := F_VN_SetAt_ITcVnContainer(ipFeatures, ipImageFeatures, nImagesLoaded, hr);
+			FW_SafeRelease(ADR(ipFeatures));
+			
+			// Display image
+			sLabel := CONCAT('Image Number: ', UDINT_TO_STRING(nImagesLoaded + 1));
+			hr := F_VN_PutTextExp(sLabel, ipImageTraining, 50, 100, TCVN_FT_HERSHEY_PLAIN, 3, aGreen, 2, TCVN_LT_ANTIALIASED, FALSE, hr);
+			hr := F_VN_TransformIntoDisplayableImage(ipImageTraining, ipImageTrainingDisp, hr);
+			
+			nImagesLoaded := nImagesLoaded + 1;
+			IF nImagesLoaded < nImagesTotal THEN
+				// Trigger next image
+				bTrigger := TRUE;
+			ELSE
+				// After collecting all training data, normalize the feature values
+				hr := F_VN_GetFeatureScales(ipImageFeatures, ipScales, TCVN_FST1_MINMAX, hr);
+				IF eRegressorType = E_RegressorType.STA THEN
+					hr := F_VN_FeatureScalingExp(ipImageFeatures, ipScales, ipScaledFeatures, 0.1, 0.9, hr);
+					hr := F_VN_GetFeatureScales(ipLabels, ipStaResultScaling, TCVN_FST1_MINMAX, hr);
+					hr := F_VN_FeatureScalingExp(ipLabels, ipStaResultScaling, ipLabels, 0.1, 0.9, hr);
+				ELSE
+					hr := F_VN_FeatureScaling(ipImageFeatures, ipScales, ipScaledFeatures, hr);
+					FW_SafeRelease(ADR(ipStaResultScaling));
+				END_IF
+				FW_SafeRelease(ADR(ipImageFeatures));
+			END_IF
+		END_IF
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <Method Name="GetTrainingData" Id="{e3969197-051a-4bea-8f7b-e1d6dc2b1472}">
+      <Declaration><![CDATA[METHOD PUBLIC GetTrainingData : HRESULT
+VAR_INPUT
+	ipTrainingSamples		: REFERENCE TO ITcVnContainer;
+	ipClassLabels			: REFERENCE TO ITcVnContainer;
+	ipStaPredictionScaling	: REFERENCE TO ITcVnContainer;
+	ipFeatureScaling		: REFERENCE TO ITcVnContainer;
+END_VAR
+VAR
+	hr						: HRESULT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nImagesLoaded = nImagesTotal THEN
+	hr := F_VN_CopyContainer(ipScaledFeatures, ipTrainingSamples, hr);
+	hr := F_VN_CopyContainer(ipLabels, ipClassLabels, hr);
+	IF eRegressorType = E_RegressorType.STA THEN
+		hr := F_VN_CopyContainer(ipStaResultScaling, ipStaPredictionScaling, hr);
+	END_IF
+	GetTrainingData := F_VN_CopyContainer(ipScales, ipFeatureScaling, hr);
+ELSE
+	GetTrainingData := S_PENDING;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Reset" Id="{7a50c466-2638-4410-8913-503d74960d64}">
+      <Declaration><![CDATA[METHOD PUBLIC Reset : HRESULT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nImagesLoaded := 0;
+FW_SafeRelease(ADR(ipFeatures));
+FW_SafeRelease(ADR(ipImageFeatures));
+FW_SafeRelease(ADR(ipLabels));
+FW_SafeRelease(ADR(ipStaResultScaling));
+FW_SafeRelease(ADR(ipScales));
+FW_SafeRelease(ADR(ipScaledFeatures));
+bTrigger := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_TrainingDataHandler">
+      <LineId Id="478" Count="2" />
+      <LineId Id="598" Count="0" />
+      <LineId Id="482" Count="30" />
+      <LineId Id="663" Count="0" />
+      <LineId Id="514" Count="2" />
+      <LineId Id="518" Count="12" />
+      <LineId Id="628" Count="1" />
+      <LineId Id="633" Count="0" />
+      <LineId Id="632" Count="0" />
+      <LineId Id="630" Count="1" />
+      <LineId Id="665" Count="0" />
+      <LineId Id="531" Count="5" />
+      <LineId Id="53" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrainingDataHandler.GetTrainingData">
+      <LineId Id="37" Count="2" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="40" Count="3" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrainingDataHandler.Reset">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

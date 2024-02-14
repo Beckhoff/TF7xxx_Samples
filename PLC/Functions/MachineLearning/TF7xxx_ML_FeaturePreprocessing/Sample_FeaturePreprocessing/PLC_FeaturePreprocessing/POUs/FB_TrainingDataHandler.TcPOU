@@ -1,0 +1,137 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_TrainingDataHandler" Id="{70d0812c-d4f3-4eb7-b546-f0a75043b97b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK PUBLIC FB_TrainingDataHandler
+VAR_INPUT
+	stExtractionParams		:	REFERENCE TO ST_ExtractionParams;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	hr						: HRESULT;
+	eCameraState			: ETcVnCameraState;
+	fbCameraTraining		: FB_VN_SimpleCameraControl;	
+	ipImageTraining			: ITcVnImage;
+	ipImageTrainingDisp		: ITcVnDisplayableImage;
+	bTrigger				: BOOL := TRUE;
+	sLabel					: STRING(255);
+	aGreen					: TcVnVector4_LREAL := [0, 255, 0];
+	
+	// Image Info
+	nImagesTotal			: UDINT := 12;
+	nImagesLoaded			: UDINT := 0;
+	
+	ipFeatures				: ITcVnContainer;
+	ipImageFeatures			: ITcVnContainer;
+	ipLabels				: ITcVnContainer;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Initialize container
+IF ipImageFeatures = 0 THEN
+	hr := F_VN_CreateContainer(ipImageFeatures, ContainerType_Vector_Vector_LREAL, nImagesTotal, hr);
+	hr := F_VN_CreateContainer(ipLabels, ContainerType_Vector_DINT, nImagesTotal, hr);
+END_IF
+
+// Get training images
+eCameraState := fbCameraTraining.GetState();
+
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraTraining.Reset();
+	
+// Camera trigger image
+ELSIF eCameraState = TCVN_CS_TRIGGERING THEN
+	hr := fbCameraTraining.TriggerImage();
+	
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraTraining.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+
+	IF bTrigger THEN
+		hr := fbCameraTraining.TriggerImage();
+		IF SUCCEEDED(hr) THEN
+			bTrigger := FALSE;
+		END_IF
+	ELSE
+		hr := fbCameraTraining.GetCurrentImage(ipImageTraining);
+
+		// Check if new image was received
+		IF SUCCEEDED(hr) AND ipImageTraining <> 0 THEN
+			
+			// Get features from training image 
+			hr := F_ExtractFeatures(stExtractionParams, ipImageTraining, ipFeatures, hr);
+		
+			// Add features and label to the containers. First class label = 0, second class = 1
+			hr := F_VN_SetAt_ITcVnContainer(ipFeatures, ipImageFeatures, nImagesLoaded, hr);
+			FW_SafeRelease(ADR(ipFeatures));
+			hr := F_VN_SetAt_DINT(UDINT_TO_DINT(nImagesLoaded / 6), ipLabels, nImagesLoaded, hr);
+			
+			// Display image
+			sLabel := CONCAT('Image Number: ', UDINT_TO_STRING(nImagesLoaded + 1));
+			hr := F_VN_PutTextExp(sLabel, ipImageTraining, 30, 60, TCVN_FT_HERSHEY_PLAIN, 4, aGreen, 2, TCVN_LT_ANTIALIASED, FALSE, hr);
+			hr := F_VN_TransformIntoDisplayableImage(ipImageTraining, ipImageTrainingDisp, hr);
+			
+			nImagesLoaded := nImagesLoaded + 1;
+			IF nImagesLoaded < nImagesTotal THEN
+				// Trigger next image
+				bTrigger := TRUE;
+			END_IF
+		END_IF
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <Method Name="GetTrainingData" Id="{fc9f8853-87eb-453b-ac28-87c0ea8456d5}">
+      <Declaration><![CDATA[METHOD PUBLIC GetTrainingData : HRESULT
+VAR_INPUT
+	ipTrainingSamples	: REFERENCE TO ITcVnContainer;
+	ipClassLabels		: REFERENCE TO ITcVnContainer;
+END_VAR
+VAR
+	hr					: HRESULT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nImagesLoaded = nImagesTotal THEN
+	hr := F_VN_CopyContainer(ipImageFeatures, ipTrainingSamples, hr);
+	GetTrainingData := F_VN_CopyContainer(ipLabels, ipClassLabels, hr);
+ELSE
+	GetTrainingData := S_PENDING;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Reset" Id="{7a50c466-2638-4410-8913-503d74960d64}">
+      <Declaration><![CDATA[METHOD PUBLIC Reset : HRESULT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nImagesLoaded := 0;
+FW_SafeRelease(ADR(ipFeatures));
+FW_SafeRelease(ADR(ipImageFeatures));
+FW_SafeRelease(ADR(ipLabels));
+bTrigger := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_TrainingDataHandler">
+      <LineId Id="478" Count="49" />
+      <LineId Id="533" Count="3" />
+      <LineId Id="53" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrainingDataHandler.GetTrainingData">
+      <LineId Id="37" Count="2" />
+      <LineId Id="41" Count="2" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrainingDataHandler.Reset">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

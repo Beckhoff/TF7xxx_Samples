@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4024.12">
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4024.53">
 	<DataTypes>
 		<DataType>
 			<Name GUID="{DB6B59A0-4FB0-4B14-A83C-AC7A76AD688D}">JobTaskId</Name>
@@ -1581,6 +1581,11 @@
 			</Hides>
 		</DataType>
 		<DataType>
+			<Name GUID="{478C4436-6F33-4F6F-B4A8-88074B54DCD4}" TcBaseType="true">ETYPE_VLAN_HEADER</Name>
+			<BitSize>32</BitSize>
+			<BaseType GUID="{18071995-0000-0000-0000-000000000008}">UDINT</BaseType>
+		</DataType>
+		<DataType>
 			<Name GUID="{03010095-0000-0000-E000-000000000064}" TcBaseType="true">ITcIoUdpProtocolRecv</Name>
 			<BitSize X64="64">32</BitSize>
 			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
@@ -2833,6 +2838,63 @@
 			</Method>
 		</DataType>
 		<DataType>
+			<Name GUID="{7CECC506-F55F-4594-B611-972D650865D2}" TcBaseType="true">TCPIP_EVENT</Name>
+			<BitSize>32</BitSize>
+			<BaseType GUID="{18071995-0000-0000-0000-000000000008}">UDINT</BaseType>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_NONE]]></Text>
+				<Enum>0</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_ERROR]]></Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_RESET]]></Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_TIMEOUT]]></Text>
+				<Enum>3</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_CONN_ESTABLISHED]]></Text>
+				<Enum>4</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_CONN_INCOMING]]></Text>
+				<Enum>5</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_CONN_CLOSED]]></Text>
+				<Enum>6</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_CONN_IDLE]]></Text>
+				<Enum>7</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_DATA_RECEIVED]]></Text>
+				<Enum>8</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_DATA_SENT]]></Text>
+				<Enum>9</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_KEEP_ALIVE]]></Text>
+				<Enum>10</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_LINKCONNECT]]></Text>
+				<Enum>11</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text><![CDATA[TCPIP_EVENT_LINKDISCONNECT]]></Text>
+				<Enum>12</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
 			<Name GUID="{03010099-0000-0000-E000-000000000064}" TcBaseType="true">ITcIoTcpProtocolRecv</Name>
 			<BitSize X64="64">32</BitSize>
 			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
@@ -4065,12 +4127,12 @@
 		</System>
 		<Plc>
 			<Project GUID="{3F8A7077-053C-4EC5-8DB7-7816CDC4E90E}" Name="PLC_CalibrationAsymCircle" PrjFilePath="PLC_CalibrationAsymCircle\PLC_CalibrationAsymCircle.plcproj" TmcFilePath="PLC_CalibrationAsymCircle\PLC_CalibrationAsymCircle.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="PLC_CalibrationAsymCircle\PLC_CalibrationAsymCircle.tmc">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="PLC_CalibrationAsymCircle\PLC_CalibrationAsymCircle.tmc" TmcHash="{8A9D603E-2C0C-8222-FE65-C0AB81E3F1E0}">
 					<Name>PLC_CalibrationAsymCircle Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Contexts>
 						<Context>
-							<Id NeedCalleeCall="true">0</Id>
+							<Id>0</Id>
 							<Name>PlcTask</Name>
 							<ManualConfig>
 								<OTCID>#x02010030</OTCID>
@@ -4190,7 +4252,7 @@
 							</TcSmExtension>
 						</TcSmExtensions>
 					</Xml>
-					<Module Id="#x01010030" Disabled="true" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.2.13" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010030" Disabled="true" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.4.8" TcSmClass="CTComVisionObjDef">
 						<Name>Camera1 Image Acquisition (CGevImageAcquisition)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{8B8C3693-0B4E-4D00-A22A-AFC6977207C3}" TcSmClass="CTComVisionObjDef">
@@ -4403,7 +4465,7 @@
 								</Value>
 							</InterfacePointerValues>
 						</TmcDesc>
-						<Module Id="#x01010040" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.2.13" TcSmClass="CTComVisionObjDef">
+						<Module Id="#x01010040" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.4.8" TcSmClass="CTComVisionObjDef">
 							<Name>Gvcp Module (CGvcpProtocol)</Name>
 							<ImageId>1000</ImageId>
 							<TmcDesc GUID="{A2F12437-8A89-453B-BAFC-5E9934B8C8DC}" TcSmClass="CTComVisionObjDef">
@@ -4545,7 +4607,7 @@
 								</ParameterValues>
 							</TmcDesc>
 						</Module>
-						<Module Id="#x01010050" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.2.13" TcSmClass="CTComVisionObjDef">
+						<Module Id="#x01010050" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.4.8" TcSmClass="CTComVisionObjDef">
 							<Name>Gvsp Module (CGvspProtocol)</Name>
 							<ImageId>1000</ImageId>
 							<TmcDesc GUID="{9D2B8D47-8462-4251-80A0-5AA35A79EF48}" TcSmClass="CTComVisionObjDef">
@@ -4588,7 +4650,7 @@
 									</Parameter>
 									<Parameter>
 										<Name>GvspMaxPacketSize</Name>
-										<Comment><![CDATA[Maximum size of a GVSP packet, that can be recieved [Default: 1500]]]></Comment>
+										<Comment><![CDATA[Maximum size of a GVSP packet, that can be received [Default: 1500]]]></Comment>
 										<BitSize>32</BitSize>
 										<BaseType GUID="{18071995-0000-0000-0000-000000000008}">UDINT</BaseType>
 										<Unit><![CDATA[byte]]></Unit>
@@ -4614,7 +4676,7 @@
 									</Parameter>
 									<Parameter>
 										<Name>MaxBlockNumber</Name>
-										<Comment><![CDATA[Maximum number of blocks to be processed simultaneousely (0 means unlimited)[Default: 5]]]></Comment>
+										<Comment><![CDATA[Maximum number of blocks to be processed simultaneousely [Default: 5]]]></Comment>
 										<BitSize>32</BitSize>
 										<BaseType GUID="{18071995-0000-0000-0000-000000000008}">UDINT</BaseType>
 										<PTCID>#x00000008</PTCID>
@@ -4635,6 +4697,15 @@
 										<BaseType GUID="{18071995-0000-0000-0000-00000000000B}">ULINT</BaseType>
 										<Unit><![CDATA[us]]></Unit>
 										<PTCID>#x00000009</PTCID>
+										<ContextId>1</ContextId>
+									</Parameter>
+									<Parameter OnlineParameter="true" ReadOnly="true">
+										<Name>GvspCurPacketSize</Name>
+										<Comment><![CDATA[Current size of a GVSP packets [less than or equal to GvspMaxPacketSize]]]></Comment>
+										<BitSize>32</BitSize>
+										<BaseType GUID="{18071995-0000-0000-0000-000000000008}">UDINT</BaseType>
+										<Unit><![CDATA[byte]]></Unit>
+										<PTCID>#x00001006</PTCID>
 										<ContextId>1</ContextId>
 									</Parameter>
 									<Parameter OnlineParameter="true" ReadOnly="true">
@@ -4688,6 +4759,10 @@
 									<Value>
 										<Name>BlockTimeout</Name>
 										<Value>5000</Value>
+									</Value>
+									<Value>
+										<Name>GvspCurPacketSize</Name>
+										<Value>0</Value>
 									</Value>
 									<Value>
 										<Name>GvspProtocolDiagnosis.stRecv.nSuccess</Name>
@@ -4751,7 +4826,7 @@
 							</TmcDesc>
 						</Module>
 					</Module>
-					<Module Id="#x01010060" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.2.13" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010060" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.4.8" TcSmClass="CTComVisionObjDef">
 						<Name>Camera1 Image Acquisition Simulation (CGevImageAcquisitionSimulation)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{F6C5A2D8-F17E-45DE-A68A-B78B3B54B4EC}" TcSmClass="CTComVisionObjDef">
@@ -4802,6 +4877,46 @@
 									<PTCID>#x00000020</PTCID>
 									<ContextId>1</ContextId>
 								</Parameter>
+								<Parameter>
+									<Name>PlaybackMode</Name>
+									<Comment TxtId=""><![CDATA[0: Stream, 1: Trigger [Default: 0]]]></Comment>
+									<BitSize>32</BitSize>
+									<BaseType GUID="{18071995-0000-0000-0000-000000000009}">DINT</BaseType>
+									<PTCID>#x00000001</PTCID>
+									<ContextId>1</ContextId>
+								</Parameter>
+								<Parameter>
+									<Name>PlaybackStrategy</Name>
+									<Comment TxtId=""><![CDATA[0: SlowDown, 1: SkipMissed, 2: AbortOnLag [Default: 0]]]></Comment>
+									<BitSize>32</BitSize>
+									<BaseType GUID="{18071995-0000-0000-0000-000000000009}">DINT</BaseType>
+									<PTCID>#x00000002</PTCID>
+									<ContextId>1</ContextId>
+								</Parameter>
+								<Parameter>
+									<Name>PlaybackSpeed</Name>
+									<Comment TxtId=""><![CDATA[[Default: 1.0]]]></Comment>
+									<BitSize>32</BitSize>
+									<BaseType GUID="{18071995-0000-0000-0000-00000000000D}">REAL</BaseType>
+									<PTCID>#x00000003</PTCID>
+									<ContextId>1</ContextId>
+								</Parameter>
+								<Parameter>
+									<Name>Loop</Name>
+									<Comment TxtId=""><![CDATA[If TRUE, the stream is restarted at the beginning when the end is reached [Default: FALSE]]]></Comment>
+									<BitSize>8</BitSize>
+									<BaseType GUID="{18071995-0000-0000-0000-000000000030}">BOOL</BaseType>
+									<PTCID>#x00000004</PTCID>
+									<ContextId>1</ContextId>
+								</Parameter>
+								<Parameter>
+									<Name>FilePath</Name>
+									<Comment TxtId=""><![CDATA[The full path of the camera stream (.tcs)]]></Comment>
+									<BitSize>2080</BitSize>
+									<BaseType GUID="{18071995-0000-0000-0000-000100000103}">STRING(259)</BaseType>
+									<PTCID>#x00000005</PTCID>
+									<ContextId>1</ContextId>
+								</Parameter>
 							</Parameters>
 							<InterfacePointers>
 								<InterfacePointer>
@@ -4820,6 +4935,26 @@
 									<Name>ActivateBlockIDCorrection</Name>
 									<EnumText>FALSE</EnumText>
 								</Value>
+								<Value>
+									<Name>PlaybackMode</Name>
+									<Value>0</Value>
+								</Value>
+								<Value>
+									<Name>PlaybackStrategy</Name>
+									<Value>0</Value>
+								</Value>
+								<Value>
+									<Name>PlaybackSpeed</Name>
+									<Value>0</Value>
+								</Value>
+								<Value>
+									<Name>Loop</Name>
+									<EnumText>FALSE</EnumText>
+								</Value>
+								<Value>
+									<Name>FilePath</Name>
+									<String></String>
+								</Value>
 							</ParameterValues>
 							<InterfacePointerValues>
 								<Value>
@@ -4829,7 +4964,7 @@
 							</InterfacePointerValues>
 						</TmcDesc>
 					</Module>
-					<Module Id="#x01010070" Disabled="true" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.2.13" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010070" Disabled="true" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.4.8" TcSmClass="CTComVisionObjDef">
 						<Name>Camera1 Ads Communicator (CGevAdsCommunicator)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{D3AC2B42-00B6-4F04-B20D-A1A9E3949D9B}" TcSmClass="CTComVisionObjDef">
@@ -4864,6 +4999,9 @@
 								</Interface>
 								<Interface DisableCodeGeneration="true">
 									<Type GUID="{3CCE1940-FF2A-4594-9FB0-40033A186838}">ITcIoGevImageAcquisition</Type>
+								</Interface>
+								<Interface DisableCodeGeneration="true">
+									<Type GUID="{00000038-0000-0000-E000-000000000064}">ITComObjectCategory</Type>
 								</Interface>
 							</Interfaces>
 							<Parameters>
@@ -4934,7 +5072,7 @@
 							</InterfacePointerValues>
 						</TmcDesc>
 					</Module>
-					<Module Id="#x01010080" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.2.13" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010080" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.4.8" TcSmClass="CTComVisionObjDef">
 						<Name>Camera1 Image Provider (CGevImageProvider)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{F81ECC63-F412-4CF1-ABEC-DA193F5F64AE}" TcSmClass="CTComVisionObjDef">

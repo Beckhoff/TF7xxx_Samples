@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ESvmClassifierType" Id="{b269595b-6bcc-49a1-9f45-7fbb49b3b97a}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE ESvmClassifierType :
+(
+	C := TO_UDINT(ETcVnSvm.TCVN_SVM_C_CLASSIFIER),
+	NU := TO_UDINT(ETcVnSvm.TCVN_SVM_NU_CLASSIFIER)
+) UDINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

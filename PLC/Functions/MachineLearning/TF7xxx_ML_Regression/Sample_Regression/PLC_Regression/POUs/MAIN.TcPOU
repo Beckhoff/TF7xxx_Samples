@@ -1,0 +1,305 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MAIN" Id="{9ff3acff-c3e3-44bd-b966-d316723aa0ba}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	eRegressorType		: 	E_RegressorType;		// Regressor type
+	stParams			:	ST_RegressorParams;		// Regressor parameters
+	bResetModel			:	BOOL;					// Reset model to start a new training with a changed model or parameters
+	bResetTrainingData	:	BOOL;					// Reset the trained features to get new ones and train model
+	eTrainedModelType	: 	E_RegressorType;
+	
+	hrTrain				:	HRESULT;
+	hrTest				:	HRESULT;
+	
+	ipImageTest			:	ITcVnImage;
+	ipImageResDisp		:	ITcVnDisplayableImage;
+	
+	eCameraState		:	ETcVnCameraState;	
+	fbCameraTest		:	FB_VN_SimpleCameraControl;
+	
+	fbTrainingDataHandler:	FB_TrainingDataHandler;
+	
+	ipRegressorModel	:	ITcVnMlModel;
+	ipSamplesTraining	:	ITcVnContainer;
+	ipScalarTargets		:	ITcVnContainer;
+	ipFeatureScaling	:	ITcVnContainer;
+	ipSampleTest		:	ITcVnContainer;
+	ipStaPredictionScaling:	ITcVnContainer;
+	fPredictedScalar	:	REAL;
+	fNovelty			:	REAL;
+	
+	// Result
+	fNoveltyThreshold	:	REAL;
+	sLabel				:	STRING(255);
+	aGreen				:	TcVnVector4_LREAL := [0, 255, 0];
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Disclaimer
+
+// This publication contains statements about the suitability of our products for certain
+// areas of application. These statements are based on typical features of our products.
+// The examples shown in this publication are for demonstration purposes only.
+// The information provided herein should not be regarded as specific operation characteristics.
+// It is incumbent on the customer to check and decide whether a product is suitable for use
+// in a particular application. We do not give any warranty that the source code which is
+// made available with this publication is complete or accurate.
+
+// THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND,
+// EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY WITH RESPECT TO NON-INFRINGEMENT,
+// FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR FITNESS FOR ANY PARTICULAR PURPOSE.
+
+// This publication may be changed from time to time without prior notice.
+// No liability is assumed for errors and/or omissions.
+// Our products are described in detail in our data sheets and documentations.
+// Product-specific warnings and cautions must be observed.
+// For the latest version of our data sheets and documentations visit our website (www.beckhoff.de).
+
+// © Beckhoff Automation GmbH & Co. KG, December 2023
+
+// The reproduction, distribution and utilization of this document as well as the communication
+// of its contents to others without express authorization is prohibited. 
+// Offenders will be held liable for the payment of damages.
+// All rights reserved in the event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+// SAMPLE - Machine Learning Regression
+//	-------------------------------------------------------
+
+// Steps To Do:
+// ------------
+// 1. Add the training images to the TrainingImages control
+// 2. Add the test images to the TestingImages control
+// 3. Activate the configuration -> Start TwinCAT system and PLC to run -> watch the results in the ADS Image Watch
+// 4. Change eRegressorType and stParams to change the model or settings
+// 5. Set bResetModel to start create a new model and start training
+//    Note: If you change to eClassifierType = STA or from this type to another, a bResetTrainingData is automatically performed due to the different scaling of the training data.
+// 6. Set bResetTrainingData to get new training data if images or feature extraction changed
+
+// Reset the trained features to get new ones and train model
+IF bResetTrainingData
+	OR (eTrainedModelType <> E_RegressorType.STA AND eRegressorType = E_RegressorType.STA) 
+	OR (eTrainedModelType = E_RegressorType.STA AND eRegressorType <> E_RegressorType.STA) THEN
+	
+	bResetTrainingData := FALSE;
+	fbTrainingDataHandler.Reset();
+	FW_SafeRelease(ADR(ipSamplesTraining));
+	FW_SafeRelease(ADR(ipScalarTargets));
+	FW_SafeRelease(ADR(ipFeatureScaling));
+	FW_SafeRelease(ADR(ipRegressorModel));
+	FW_SafeRelease(ADR(ipStaPredictionScaling));
+	eTrainedModelType := eRegressorType;
+	// Reset return value
+	hrTrain := S_OK;
+END_IF
+
+// Get sample data for training
+fbTrainingDataHandler(eRegressorType := eRegressorType);
+IF ipSamplesTraining = 0 AND ipScalarTargets = 0 AND ipFeatureScaling = 0 AND ipStaPredictionScaling = 0 THEN
+	hrTrain := fbTrainingDataHandler.GetTrainingData(ipSamplesTraining, ipScalarTargets, ipStaPredictionScaling, ipFeatureScaling);
+END_IF
+
+// Retrain with changed model or parameters
+IF bResetModel THEN
+	bResetModel := FALSE;
+	FW_SafeRelease(ADR(ipRegressorModel));
+	eTrainedModelType := eRegressorType;
+	// Reset return value
+	hrTrain := S_OK;
+END_IF
+
+IF SUCCEEDED(hrTrain) AND ipSamplesTraining <> 0 AND ipScalarTargets <> 0 AND ipRegressorModel = 0 THEN
+	
+	// Create the model
+	CASE eRegressorType OF
+		
+		E_RegressorType.KNN:
+			hrTrain := F_VN_CreateKnnModel(
+								ipMlModel			:=	ipRegressorModel,
+								eKnnType			:=	TCVN_KNN_REGRESSOR,
+								nK					:=	stParams.nKnnK,
+								hrPrev				:=	hrTrain);
+			
+			// Set novelty threshold according to model results
+			fNoveltyThreshold := 0.1;
+			
+		E_RegressorType.RTrees:
+			hrTrain := F_VN_CreateRTreesModelExp2(
+								ipMlModel			:=	ipRegressorModel,
+								eRTreesType			:=	TCVN_RT_REGRESSOR,
+								nMaxDepth			:=	stParams.nRTreesMaxDepth,
+								nMinSamples			:=	stParams.nRTreesMinSamples,
+								nActiveVariables	:=	stParams.nRTreesActiveVariables,
+								nMaxiterations		:=	stParams.nRTreesMaxIterations,
+								fEpsilon			:=	stParams.fRTreesEpsilon,
+								fRegressionAccuracy	:=	stParams.fRTreesRegressionAccuracy,
+								ipClassPriors		:=	0,
+								hrPrev				:=	hrTrain);
+
+		E_RegressorType.STA:
+			hrTrain := F_VN_CreateStaModelExp2(
+								ipMlModel           :=	ipRegressorModel,
+								eStaType            :=	TCVN_STA_REGRESSOR,
+								fRho                :=	stParams.fStaRho,
+								nNu                 :=	stParams.nStaNu,
+								bDoublePrecision    :=	stParams.bStaDoublePrecision,
+								fBetaSbm			:=	stParams.fStaBetaSbm, 
+								nPhi				:=	stParams.nStaPhi, 
+								nTau				:=	stParams.nStaTau, 
+								hrPrev				:=	hrTrain); 
+
+			// Set novelty threshold according to model results
+			fNoveltyThreshold := 0.2;
+			
+		E_RegressorType.SVM:
+			hrTrain := F_VN_CreateSvmModelExp(
+								ipMlModel			:=	ipRegressorModel,
+								eSvmType			:=	TO_UDINT(stParams.eSvmType),
+								fC					:=	stParams.fSvmC,
+								fNu					:=	stParams.fSvmNu,
+								fP					:=	stParams.fSvmP,
+								eKernelType			:=	stParams.eSvmKernelType,
+								fGamma				:=	stParams.fSvmGamma,
+								fCoef0				:=	stParams.fSvmCoef0,
+								fDegree				:=	stParams.fSvmDegree,
+								nMaxIterations		:=	stParams.nSvmMaxIterations,
+								fEpsilon			:=	stParams.fSvmEpsilon,
+								hrPrev				:=	hrTrain);
+	
+	END_CASE
+	
+	// Train model
+	hrTrain := F_VN_TrainBatch(
+					ipMlModel   :=  ipRegressorModel,
+					ipSamples   :=  ipSamplesTraining,
+					ipOutputs   :=  ipScalarTargets,
+					hrPrev      :=  hrTrain);
+
+END_IF
+
+// Get test images
+eCameraState := fbCameraTest.GetState();
+
+IF eCameraState = TCVN_CS_ERROR THEN
+	hrTest := fbCameraTest.Reset();
+
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hrTest := fbCameraTest.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hrTest := fbCameraTest.GetCurrentImage(ipImageTest);
+
+	// Check if new image was received
+	IF SUCCEEDED(hrTest) AND ipImageTest <> 0 THEN
+
+        IF ipRegressorModel <> 0 AND ipFeatureScaling <> 0 THEN
+			// Get features from sample image and scale 
+			hrTest := F_ExtractFeatures(ipImageTest, ipSampleTest, hrTest);
+			IF eRegressorType = E_RegressorType.STA THEN
+				hrTest := F_VN_FeatureScalingExp(ipSampleTest, ipFeatureScaling, ipSampleTest, 0.1, 0.9, hrTest);
+			ELSE
+				hrTest := F_VN_FeatureScaling(ipSampleTest, ipFeatureScaling, ipSampleTest, hrTest);
+			END_IF
+			
+			// Prediction with optional novelty calculation if supported
+			CASE eRegressorType OF
+			
+				E_RegressorType.KNN, E_RegressorType.STA:
+					// Predict scalar result and novelty
+					hrTest := F_VN_PredictSampleScalarExp(ipRegressorModel, ipSampleTest, fPredictedScalar, fNovelty, hrTest);
+					
+					IF eRegressorType = E_RegressorType.STA AND ipStaPredictionScaling <> 0 THEN
+						// Inverse scaling of the prediction result to get the original target value range
+						hrTest := F_VN_InverseFeatureScalingExp_REAL(fPredictedScalar, ipStaPredictionScaling, fPredictedScalar, 0.1, 0.9, hrTest);
+					END_IF
+				
+					// Check the degree of novelty and get result
+					IF fNovelty <= fNoveltyThreshold THEN
+						sLabel := CONCAT('Prediction: ',REAL_TO_STRING(fPredictedScalar));
+					ELSE
+						sLabel := 'Prediction: Unknown';
+					END_IF
+			ELSE
+				// Predict scalar result
+				hrTest := F_VN_PredictSampleScalar(ipRegressorModel, ipSampleTest, fPredictedScalar, hrTest);
+				// Get result
+				sLabel := CONCAT('Prediction: ',REAL_TO_STRING(fPredictedScalar));				
+			END_CASE
+			
+			// Write result
+			hrTest := F_VN_PutTextExp(sLabel, ipImageTest, 22, 70, TCVN_FT_HERSHEY_PLAIN, 3, aGreen, 2, TCVN_LT_ANTIALIASED, FALSE, hrTest);
+		END_IF
+		
+		// Display Image
+		hrTest := F_VN_TransformIntoDisplayableImage(ipImageTest, ipImageResDisp, S_OK);
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="595" Count="1" />
+      <LineId Id="868" Count="23" />
+      <LineId Id="622" Count="12" />
+      <LineId Id="1123" Count="0" />
+      <LineId Id="635" Count="0" />
+      <LineId Id="814" Count="0" />
+      <LineId Id="637" Count="1" />
+      <LineId Id="1120" Count="1" />
+      <LineId Id="1124" Count="0" />
+      <LineId Id="639" Count="4" />
+      <LineId Id="763" Count="0" />
+      <LineId Id="994" Count="0" />
+      <LineId Id="1038" Count="0" />
+      <LineId Id="1127" Count="0" />
+      <LineId Id="1126" Count="0" />
+      <LineId Id="644" Count="11" />
+      <LineId Id="1122" Count="0" />
+      <LineId Id="1129" Count="0" />
+      <LineId Id="1128" Count="0" />
+      <LineId Id="656" Count="1" />
+      <LineId Id="498" Count="0" />
+      <LineId Id="501" Count="9" />
+      <LineId Id="956" Count="1" />
+      <LineId Id="955" Count="0" />
+      <LineId Id="512" Count="10" />
+      <LineId Id="762" Count="0" />
+      <LineId Id="524" Count="0" />
+      <LineId Id="923" Count="1" />
+      <LineId Id="1074" Count="0" />
+      <LineId Id="1083" Count="3" />
+      <LineId Id="1079" Count="3" />
+      <LineId Id="1073" Count="0" />
+      <LineId Id="960" Count="0" />
+      <LineId Id="958" Count="0" />
+      <LineId Id="934" Count="0" />
+      <LineId Id="959" Count="0" />
+      <LineId Id="527" Count="12" />
+      <LineId Id="541" Count="0" />
+      <LineId Id="543" Count="2" />
+      <LineId Id="594" Count="0" />
+      <LineId Id="546" Count="4" />
+      <LineId Id="552" Count="1" />
+      <LineId Id="688" Count="19" />
+      <LineId Id="935" Count="3" />
+      <LineId Id="708" Count="0" />
+      <LineId Id="816" Count="1" />
+      <LineId Id="709" Count="0" />
+      <LineId Id="818" Count="1" />
+      <LineId Id="825" Count="0" />
+      <LineId Id="833" Count="0" />
+      <LineId Id="949" Count="1" />
+      <LineId Id="1027" Count="0" />
+      <LineId Id="951" Count="1" />
+      <LineId Id="827" Count="5" />
+      <LineId Id="820" Count="1" />
+      <LineId Id="834" Count="1" />
+      <LineId Id="837" Count="0" />
+      <LineId Id="822" Count="2" />
+      <LineId Id="718" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_RegressorParams" Id="{c46ba47b-cd3b-4f47-b69e-0730d1f6595b}">
+    <Declaration><![CDATA[TYPE ST_RegressorParams :
+STRUCT
+	nKnnK							:	UDINT 				:=	2;
+	nRTreesMaxDepth					:	UDINT				:=	5;			// optional Exp parameter
+	nRTreesMinSamples				:	UDINT				:=	2;			// optional Exp parameter
+	nRTreesActiveVariables			:	UDINT				:=	0;			// optional Exp parameter
+	nRTreesMaxIterations			:	UDINT				:=	50;			// optional Exp parameter
+	fRTreesEpsilon					:	LREAL				:=	0.1;		// optional Exp parameter
+	fRTreesRegressionAccuracy		:	REAL				:=	0.0;		// optional Exp parameter
+	fStaRho	                        :	LREAL				:=	0.99;
+	nStaNu	                        :	UDINT				:=	5;			// optional Exp parameter
+	bStaDoublePrecision				:	BOOL				:=	TRUE;		// optional Exp parameter
+	fStaBetaSbm						:	LREAL				:=	0.0;		// optional Exp parameter
+	nStaPhi							:	UDINT				:=	1;			// optional Exp parameter
+	nStaTau							:	UDINT				:=	100;		// optional Exp parameter
+	eSvmType						:	ESvmRegressorType	:=	ESvmRegressorType.EPS;
+	fSvmC							:	LREAL				:=	1000;
+	fSvmNu							:	LREAL				:=	0.2;
+	fSvmP							:	LREAL				:=	1;
+	eSvmKernelType					:	ETcVnSvmKernelType	:=	ETcVnSvmKernelType.TCVN_SKT_RBF;
+	fSvmGamma						:	LREAL				:=	1;
+	fSvmCoef0						:	LREAL				:=	0;
+	fSvmDegree						:	LREAL				:=	0;
+	nSvmMaxIterations				:	UDINT				:=	100000;		// optional Exp parameter
+	fSvmEpsilon						:	LREAL				:=	0.00001;	// optional Exp parameter
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

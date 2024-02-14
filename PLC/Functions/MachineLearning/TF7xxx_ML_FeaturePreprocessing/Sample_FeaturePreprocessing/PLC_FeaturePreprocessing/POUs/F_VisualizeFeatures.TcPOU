@@ -1,0 +1,251 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="F_VisualizeFeatures" Id="{e4241cdc-9127-444d-a072-852e8790b983}" SpecialFunc="None">
+    <Declaration><![CDATA[(* Visualize one selected feature from a sample vector in a bar chart *)
+FUNCTION F_VisualizeFeatures : HRESULT
+VAR_INPUT
+	ipSamplesTraining	: ITcVnContainer;
+	nFeatureID			: UDINT;
+	ipLabels			: ITcVnContainer;
+	nDestImageWidth		: UDINT := 900;
+	nDestImageHeight	: UDINT := 600;
+	ipDestImageDisp		: REFERENCE TO ITcVnDisplayableImage;
+	hrPrev				: HRESULT;
+END_VAR
+VAR
+	hr					: HRESULT;
+	ipChartImage		: ITcVnImage;
+	ipIterator			: ITcVnForwardIterator;
+	ipSample			: ITcVnContainer;
+	ipFeatureVector		: ITcVnContainer;
+	nNumberOfSamples	: ULINT;
+	nNumberOfFeatures	: ULINT;
+	fValue				: LREAL;
+	fMax				: LREAL;
+	fMin				: LREAL;
+	fScale				: LREAL;
+	nOffsetX			: UDINT := 20;
+	nOffsetY			: UDINT;
+	fGapRatio			: LREAL := 0.25;
+	nBarGapWidth		: UDINT;
+	nBarWidth			: UDINT;
+	i					: ULINT;
+	nBarHeight			: UDINT;
+	nLabelID			: DINT;
+	stRectangle			: TcVnRectangle_UDINT;
+	nValuePositionY		: UDINT;
+	nIndexPositionY		: UDINT;
+	stext				: STRING;
+	
+	aColorBlack			: TcVnVector4_LREAL := [0, 0, 0];
+	aColorWhite			: TcVnVector4_LREAL := [255, 255, 255];
+	// Colors to visualize the feature data if ipClassLabels are available. 
+	// Note: Add more colors if you have more classes. 
+	aColorPalette		: ARRAY [0..7]  OF TcVnVector4_LREAL :=[[255, 100, 100, 255],	// Class Label 1
+																[100, 255, 100, 255],	// Class Label 2
+																[100, 100, 255, 255],	// Class Label 3
+																[255, 255, 100, 255],	// Class Label 4
+																[100, 255, 255, 255],	// Class Label 5
+																[ 10, 125, 255, 255],	// Class Label 6
+																[125, 125, 125, 255],	// Class Label 7
+																[255, 255, 255, 255]];	// Class Label 8
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF FAILED(hrPrev) THEN
+	F_VisualizeFeatures := hrPrev;
+	RETURN;
+END_IF
+
+IF ipSamplesTraining = 0 THEN
+	F_VisualizeFeatures := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+	RETURN;
+END_IF
+
+// Get the number of samples
+hr := F_VN_GetNumberOfElements(ipSamplesTraining, nNumberOfSamples, hr);
+IF nNumberOfSamples = 0 THEN
+	F_VisualizeFeatures := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+	RETURN;
+END_IF
+	
+// Extract the feature vector (Vector_LREAL) from ipSamplesTraining (Vector_Vector_LREAL)
+hr := F_VN_GetForwardIterator(ipSamplesTraining, ipIterator, hr);
+hr := F_VN_CreateContainer(ipFeatureVector, ContainerType_Vector_LREAL, 0, hr);
+
+WHILE SUCCEEDED(hr) AND_THEN ipIterator.CheckIfEnd() <> S_OK DO
+	hr := F_VN_GetContainerExp(ipIterator, ipSample, 1, hr);
+	
+	hr := F_VN_GetNumberOfElements(ipSample, nNumberOfFeatures, hr);
+	IF nNumberOfFeatures = 0 OR nFeatureID > nNumberOfFeatures -1 THEN
+		F_VisualizeFeatures := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+		RETURN;
+	END_IF
+	
+	// Get the requested feature and add it to the result vector  
+	hr := F_VN_GetAt_LREAL(ipSample, fValue, nFeatureID, hr);
+	hr := F_VN_AppendToContainer_LREAL(fValue, ipFeatureVector, hr);
+END_WHILE
+
+FW_SafeRelease(ADR(ipSample));
+FW_SafeRelease(ADR(ipIterator));
+
+// Determine the scaling for the visualization since only positive values can be displayed in the result image
+hr := F_VN_MaxElementElementwise_LREAL(ipFeatureVector, fMax, hr);
+hr := F_VN_MinElementElementwise_LREAL(ipFeatureVector, fMin, hr);
+
+IF fMax < ABS(fMin) THEN
+	fMax := ABS(fMin);
+END_IF
+
+// Calulate scales
+fScale := (nDestImageHeight - 2 * nOffsetX) / (2 * fMax);
+nBarGapWidth := TO_UDINT((nDestImageWidth - 2 * nOffsetX) / nNumberOfSamples);
+nBarWidth := TO_UDINT((1 - fGapRatio) * nBarGapWidth);
+nOffsetY := nDestImageHeight / 2;
+
+// Create result image chart
+hr := F_VN_CreateImageAndSetPixels(ipChartImage, nDestImageWidth, nDestImageHeight, TCVN_ET_USINT, 3, aColorWhite, hr);
+
+FOR i := 0 TO nNumberOfSamples - 1 DO
+	hr := F_VN_GetAt_LREAL(ipFeatureVector, fValue, i, hr);
+	nBarHeight := LREAL_TO_UDINT(ABS(fValue * fScale));
+	
+	// Show the features with different colors according to the label, if labels are available
+	IF ipLabels <> 0 THEN
+		hr := F_VN_GetAt_DINT(ipLabels, nLabelID, i, hr);
+		// Check that the class number is not larger than the aColorPalette entries
+		IF nLabelID > 7 THEN
+			F_VisualizeFeatures := Tc2_System.E_HRESULTAdsErr.INVALIDSIZE;
+			RETURN;
+		END_IF
+	ELSE	
+		nLabelID := 0;
+	END_IF
+	
+	// Calulate the values of the bar
+	stRectangle.nX := nOffsetX + ULINT_TO_UDINT(i) * (nBarWidth + LREAL_TO_UDINT(fGapRatio * nBarGapWidth));
+	stRectangle.nY := nOffsetY  - nBarHeight;
+	stRectangle.nWidth := nBarWidth;
+	stRectangle.nHeight := nBarHeight;
+	
+	// Calculate different Y positions for negative values 
+	IF(fValue < 0) THEN
+		stRectangle.nY := nOffsetY;
+		nValuePositionY := nOffsetY + nBarHeight + 10;
+		nIndexPositionY := stRectangle.nY - 4;
+	ELSE
+		nValuePositionY := stRectangle.nY - 4;
+		nIndexPositionY := nOffsetY + 10;
+	END_IF
+	
+	// Draw the bar
+	hr := F_VN_DrawRectangle_TcVnRectangle_UDINT(stRectangle, ipChartImage, aColorPalette[nLabelID], -1, hr);
+	
+	// Draw the value label
+	IF ABS(fValue) < 0.1 THEN
+		stext := LREAL_TO_FMTSTR(fValue, 3, FALSE);
+	ELSIF ABS(fValue) < 10.0 THEN
+		stext := LREAL_TO_FMTSTR(fValue, 2, FALSE);
+	ELSE
+		stext := LREAL_TO_FMTSTR(fValue, 1, FALSE);
+	END_IF	
+	hr := F_VN_PutLabelExp(stext, ipChartImage, stRectangle.nX, nValuePositionY, 0.3, 1, TCVN_FT_HERSHEY_SIMPLEX, aColorBlack, aColorWhite, TCVN_LT_8_CONNECTED, hr);
+	
+	// Draw the feature indexes label
+	stext := ULINT_TO_STRING(i);
+	hr := F_VN_PutLabelExp(stext, ipChartImage, stRectangle.nX, nIndexPositionY, 0.3, 1, TCVN_FT_HERSHEY_SIMPLEX, aColorBlack, aColorWhite, TCVN_LT_8_CONNECTED, hr);
+	
+END_FOR
+
+// Draw the X-Axis line
+hr := F_VN_DrawLine(nOffsetX, nOffsetY, nDestImageWidth - nOffsetX, nOffsetY, ipChartImage, aColorBlack, 1, hr);
+
+// Draw a border around the chart
+hr := F_VN_DrawRectangle(0, 0, nDestImageWidth - 1, nDestImageHeight - 1, ipChartImage, aColorBlack, 1, hr);
+
+// Display result bar chart
+hr := F_VN_TransformIntoDisplayableImage(ipChartImage, ipDestImageDisp, S_OK);
+
+FW_SafeRelease(ADR(ipFeatureVector));
+F_VisualizeFeatures := hr;
+]]></ST>
+    </Implementation>
+    <LineIds Name="F_VisualizeFeatures">
+      <LineId Id="160" Count="3" />
+      <LineId Id="44" Count="4" />
+      <LineId Id="188" Count="0" />
+      <LineId Id="165" Count="1" />
+      <LineId Id="442" Count="2" />
+      <LineId Id="167" Count="0" />
+      <LineId Id="445" Count="0" />
+      <LineId Id="168" Count="4" />
+      <LineId Id="190" Count="0" />
+      <LineId Id="174" Count="3" />
+      <LineId Id="290" Count="0" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="213" Count="0" />
+      <LineId Id="197" Count="0" />
+      <LineId Id="181" Count="0" />
+      <LineId Id="195" Count="0" />
+      <LineId Id="183" Count="2" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="204" Count="0" />
+      <LineId Id="214" Count="0" />
+      <LineId Id="205" Count="1" />
+      <LineId Id="208" Count="2" />
+      <LineId Id="186" Count="0" />
+      <LineId Id="335" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="215" Count="2" />
+      <LineId Id="322" Count="0" />
+      <LineId Id="229" Count="0" />
+      <LineId Id="218" Count="0" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="230" Count="7" />
+      <LineId Id="502" Count="0" />
+      <LineId Id="499" Count="1" />
+      <LineId Id="496" Count="0" />
+      <LineId Id="498" Count="0" />
+      <LineId Id="239" Count="3" />
+      <LineId Id="278" Count="0" />
+      <LineId Id="243" Count="2" />
+      <LineId Id="275" Count="0" />
+      <LineId Id="248" Count="2" />
+      <LineId Id="276" Count="0" />
+      <LineId Id="333" Count="0" />
+      <LineId Id="330" Count="0" />
+      <LineId Id="328" Count="0" />
+      <LineId Id="334" Count="0" />
+      <LineId Id="329" Count="0" />
+      <LineId Id="253" Count="1" />
+      <LineId Id="277" Count="0" />
+      <LineId Id="281" Count="0" />
+      <LineId Id="256" Count="0" />
+      <LineId Id="309" Count="0" />
+      <LineId Id="386" Count="0" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="387" Count="0" />
+      <LineId Id="389" Count="0" />
+      <LineId Id="391" Count="0" />
+      <LineId Id="390" Count="0" />
+      <LineId Id="388" Count="0" />
+      <LineId Id="266" Count="0" />
+      <LineId Id="311" Count="0" />
+      <LineId Id="313" Count="0" />
+      <LineId Id="319" Count="1" />
+      <LineId Id="312" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="293" Count="0" />
+      <LineId Id="295" Count="1" />
+      <LineId Id="304" Count="1" />
+      <LineId Id="294" Count="0" />
+      <LineId Id="292" Count="0" />
+      <LineId Id="289" Count="0" />
+      <LineId Id="286" Count="2" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="52" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

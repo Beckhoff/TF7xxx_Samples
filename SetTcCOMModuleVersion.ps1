@@ -1,5 +1,5 @@
 ﻿param(
-    [string]$version # new version, e.g. "4.0.2.13"
+    [string]$version # new version, e.g. "4.0.4.8"
 )
 
 if([string]::IsNullOrWhiteSpace($version)) { throw "missing version parameter" }

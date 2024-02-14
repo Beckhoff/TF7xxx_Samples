@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_ClassifierParams" Id="{c46ba47b-cd3b-4f47-b69e-0730d1f6595b}">
+    <Declaration><![CDATA[TYPE ST_ClassifierParams :
+STRUCT
+	nKnnK							:	UDINT 							:=	5;
+	nRTreesMaxDepth					:	UDINT							:=	5;			// optional Exp parameter
+	nRTreesMinSamples				:	UDINT							:=	10;			// optional Exp parameter
+	nRTreesActiveVariables			:	UDINT							:=	0;			// optional Exp parameter
+	nRTreesMaxIterations			:	UDINT							:=	50;			// optional Exp parameter
+	fRTreesEpsilon					:	LREAL							:=	0.1;		// optional Exp parameter
+	fStaRho	                        :	LREAL							:=	0.92;
+	nStaNu	                        :	UDINT							:=	3;			// optional Exp parameter
+	bStaDoublePrecision				:	BOOL							:=	FALSE;		// optional Exp parameter
+	fStaBetaSbm						:	LREAL							:=	0.0;		// optional Exp parameter
+	nStaPhi							:	UDINT							:=	1;			// optional Exp parameter
+	nStaTau							:	UDINT							:=	100;		// optional Exp parameter	
+	eSvmType						:	ESvmClassifierType				:=	ESvmClassifierType.C;
+	fSvmC							:	LREAL							:=	1;
+	fSvmNu							:	LREAL							:=	1;
+	eSvmKernelType					:	ETcVnSvmKernelType				:=	ETcVnSvmKernelType.TCVN_SKT_RBF;
+	fSvmGamma						:	LREAL							:=	1;
+	fSvmCoef0						:	LREAL							:=	1;
+	fSvmDegree						:	LREAL							:=	5;
+	nSvmMaxIterations				:	UDINT							:=	100000;		// optional Exp parameter
+	fSvmEpsilon						:	LREAL							:=	0.00001;	// optional Exp parameter
+	eSvmSgdClassifierType			:	ETcVnSvmSgdClassifierType		:=	ETcVnSvmSgdClassifierType.TCVN_SSCT_ASGD; 				// optional Exp parameter
+	eSvmSgdClassifierMarginType		:	ETcVnSvmSgdClassifierMarginType	:=	ETcVnSvmSgdClassifierMarginType.TCVN_SSCMT_SOFT_MARGIN; // optional Exp parameter
+	fSvmSgdMarginRegularization		:	REAL							:=	0.00001;	// optional Exp parameter
+	fSvmSgdInitialStepSize			:	REAL							:=	0.05;		// optional Exp parameter
+	fSvmSgdStepDecreasingPower		:	REAL							:=	0.75;		// optional Exp parameter
+	nSvmSgdMaxIterations			:	UDINT							:=	100000;		// optional Exp parameter
+	fSvmSgdEpsilon					:	LREAL							:=	0.00001;	// optional Exp parameter
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

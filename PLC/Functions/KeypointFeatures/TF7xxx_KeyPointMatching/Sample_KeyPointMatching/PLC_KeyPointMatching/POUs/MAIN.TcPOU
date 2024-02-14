@@ -1,0 +1,388 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MAIN" Id="{2484f817-c0a8-4066-9279-166a7c396b04}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	// Image acquisition
+	hr						: HRESULT;
+	hrRef					: HRESULT;
+	eState					: ETcVnCameraState;
+	fbFileSource			: FB_VN_FileSourceControl;
+	
+	// Reference image
+	bCreateReference		: BOOL := TRUE; // Trigger new image
+	sReferenceFilePath		: STRING(255) := 'C:\TF7xxx_Samples\Images\Functions\KeypointFeatures\TF7xxx_KeyPointMatching\Template.png'; // File Path of the reference image to be loaded
+	fbReadImage				: FB_VN_ReadImage;
+	nReturnCode				: UDINT;
+	rTrigReadReferenceImage	: R_TRIG;
+	
+	// Images
+	ipImageInRef			: ITcVnImage;
+	ipImageInRefResult		: ITcVnImage;
+	ipImageInRefResultDisp	: ITcVnDisplayableImage;
+	ipImageSrc				: ITcVnImage;
+	ipImageSrcDisp			: ITcVnDisplayableImage;
+	ipImageMatchResult		: ITcVnImage;
+	ipImageMatchResultDisp	: ITcVnDisplayableImage;
+	ipImageAlignRegion		: ITcVnImage;
+	ipImageAlignRegionDisp	: ITcVnDisplayableImage;
+	ipImageRes				: ITcVnImage;
+	ipImageResDisp			: ITcVnDisplayableImage;
+	stImageInfo				: TcVnImageInfo;
+	
+	// Watchdog
+	hrWD					: HRESULT;
+	tStop					: DINT := 40_000;
+	tRest					: DINT;
+
+	// Color
+	aColorRed				: TcVnVector4_LREAL := [255, 0, 0];
+	aColorGreen				: TcVnVector4_LREAL := [0, 255, 0];
+	aColorBlue				: TcVnVector4_LREAL := [0, 0, 255];
+	aColorRandom			: TcVnVector4_LREAL := [-1, -1, -1, -1];
+	
+	// Reference for matching
+	stMatchingRoi			: TcVnRectangle_UDINT := (nX:= 180, nY:= 180, nWidth:= 620, nHeight:= 600);
+	stRoiOffset				: TcVnKeyPoint;
+	ipKeyPointsRef			: ITcVnContainer;				// Container for the keypoints of the reference image
+	ipDescriptorsRef		: ITcVnImage;					// Image with the desciptors of the reference image
+	nRefImageWidth			: UDINT;
+	nRefImageHeight			: UDINT;
+	nNumberOfRefKeyPoints	: ULINT;	
+	
+	// Initialization parameters for the AKAZE method
+	stAKAZEParams			: TcVnParamsAKAZE := (eDescrType := TCVN_FDT_AKAZE_MLDB, fThreshold := 0.001, nOctaves := 2, nOctaveLayers := 1, eDiffusivity := TCVN_DT1_KAZE_PM_G2);
+	
+	// Source for matching
+	ipKeyPointsSrc			: ITcVnContainer;				// Container for the keypoints of the source image
+	ipDescriptorsSrc		: ITcVnImage;					// Image with the desciptors of the source image
+	
+	// Descriptor matching
+	ipMatches				: ITcVnContainer;
+	nK						: UDINT := 2;					// Number of K nearst points
+	
+	// Filter good matches
+	ipGoodMatches			: ITcVnContainer;
+	fMaxDist				: REAL := -1;					// Distance for KNN , -1 mean disabled
+	fMaxKnnRatio			: REAL := 0.7;					// The similarity between two matches
+	nNumberOfGoodMatches	: ULINT;
+	nPercentGoodMatches		: ULINT;
+	
+	// Match coordinates
+	ipCoordinatesRef		: ITcVnContainer;
+	ipCoordinatesSrc		: ITcVnContainer;
+	aAffineTransform		: TcVnMatrix2x3_LREAL;
+	
+	// Result outputs
+	fRotationAngle			: LREAL;
+	ipAffineRectanglePoints : ITcVnContainer;
+	sText					: STRING;
+	bShowImageMatchResult	: BOOL := TRUE;
+	bAlignMatchRegion		: BOOL;
+	stRectangle				: TcVnRotatedRectangle;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Disclaimer
+
+// This publication contains statements about the suitability of our products for certain
+// areas of application. These statements are based on typical features of our products.
+// The examples shown in this publication are for demonstration purposes only.
+// The information provided herein should not be regarded as specific operation characteristics.
+// It is incumbent on the customer to check and decide whether a product is suitable for use
+// in a particular application. We do not give any warranty that the source code which is
+// made available with this publication is complete or accurate.
+
+// THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND,
+// EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY WITH RESPECT TO NON-INFRINGEMENT,
+// FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR FITNESS FOR ANY PARTICULAR PURPOSE.
+
+// This publication may be changed from time to time without prior notice.
+// No liability is assumed for errors and/or omissions.
+// Our products are described in detail in our data sheets and documentations.
+// Product-specific warnings and cautions must be observed.
+// For the latest version of our data sheets and documentations visit our website (www.beckhoff.de).
+
+// © Beckhoff Automation GmbH & Co. KG, December 2023
+
+// The reproduction, distribution and utilization of this document as well as the communication
+// of its contents to others without express authorization is prohibited. 
+// Offenders will be held liable for the payment of damages.
+// All rights reserved in the event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+// SAMPLE - KeyPoint Matching
+//	-------------------------------------------------------
+
+// Steps To Do:
+// ------------
+// 1. Add the sample images to the FileSource1 Control
+// 2. Adjust the absolute path of the reference image in the sReferenceFilePath variable. Note that this path refers to the selected target.
+// 3. Activate the Configuration -> Start TwinCAT System and PLC to run -> watch the results in the ADS Image Watch
+// 4. Switch off the optional calculation of the match image with bShowImageMatchResult to save calculation time bAlignMatchRegion
+// 5. Activate bAlignMatchRegion to get match region as an aligned image
+
+IF bCreateReference THEN
+	
+	// Trigger and get new reference image
+	rTrigReadReferenceImage(CLK := bCreateReference);
+	IF rTrigReadReferenceImage.Q THEN
+		hrRef := S_OK;
+		hrRef := FW_SafeRelease(ADR(ipImageInRef));
+		hrRef := FW_SafeRelease(ADR(ipImageInRefResult));
+		hrRef := FW_SafeRelease(ADR(ipKeyPointsRef));
+		hrRef := FW_SafeRelease(ADR(ipDescriptorsRef));
+		fbReadImage(sFilePath := sReferenceFilePath, ipDestImage := ipImageInRef, bRead := TRUE);
+	END_IF
+	fbReadImage(sFilepath:= '', bRead := FALSE);
+
+	IF SUCCEEDED(hrRef) AND ipImageInRef <> 0 THEN
+		
+		// Check pixel format and convert to gray if necessary
+		hrRef := F_VN_GetImageInfo(ipImageInRef, stImageInfo, hrRef);
+		IF stImageInfo.stPixelFormat.nChannels = 3 AND stImageInfo.stPixelFormat.ePixelEncoding = TCVN_PE_NONE THEN
+			hrRef := F_VN_ConvertColorSpace(ipImageInRef, ipImageInRef, TCVN_CST_RGB_TO_GRAY, hrRef);
+		END_IF
+		
+		hrWD := F_VN_StartRelWatchdog(tStop, S_OK);
+			// Detect the keypoints and descriptors with the AKAZE method in the reference image
+			hrRef := F_VN_KeyPointsAndDescriptorsAKAZEExp(ipImageInRef, ipKeyPointsRef, ipDescriptorsRef, 0, stAKAZEParams, hrRef);
+		hrWD := F_VN_StopWatchdog(hrWD, tRest => tRest);
+		
+		// Get the number of reference key points
+		hrRef := F_VN_GetNumberOfElements(ipKeyPointsRef, nNumberOfRefKeyPoints, hrRef);
+		IF nNumberOfRefKeyPoints < 1 THEN
+			nNumberOfRefKeyPoints := 1;
+			hrRef := Tc2_System.E_HRESULTAdsErr.NOTFOUND;
+		END_IF
+		
+		// Get width and height of the reference image
+		nRefImageWidth := stImageInfo.nWidth;
+		nRefImageHeight := stImageInfo.nHeight;
+		
+		// Draw the detected keypoints
+		hrRef := F_VN_DrawKeypointsExp(ipImageInRef, ipKeyPointsRef, ipImageInRefResult, aColorRandom, TCVN_DMF_DEFAULT, hrRef);
+
+		// Show reference image with the key points results
+		hrRef := F_VN_TransformIntoDisplayableImage(ipImageInRefResult, ipImageInRefResultDisp, hrRef);
+		bCreateReference := FALSE;
+	END_IF
+	
+	//  Check if the image was successfully loaded
+	IF (NOT fbReadImage.bBusy AND fbReadImage.bError) OR NOT bCreateReference THEN
+		nReturnCode := fbReadImage.nErrorId AND 16#FFF;
+		rTrigReadReferenceImage(CLK := FALSE);
+	END_IF
+END_IF
+
+// Get State
+eState := fbFileSource.GetState();
+
+CASE eState OF
+	
+	TCVN_CS_INITIAL, TCVN_CS_INITIALIZING, TCVN_CS_INITIALIZED, TCVN_CS_OPENING, TCVN_CS_OPENED, TCVN_CS_STARTACQUISITION:	
+		hr := fbFileSource.StartAcquisition();
+		
+	TCVN_CS_ACQUIRING:
+	
+		hr := fbFileSource.GetCurrentImage(ipImageSrc); 
+		
+		IF SUCCEEDED(hr) AND ipImageSrc <> 0 THEN
+
+			// Check pixel format and convert image
+			hr := F_VN_GetImageInfo(ipImageSrc, stImageInfo, hr);
+			IF stImageInfo.stPixelFormat.nChannels = 3 AND stImageInfo.stPixelFormat.ePixelEncoding = TCVN_PE_NONE THEN
+				ipImageRes := ipImageSrc;
+				ipImageSrc := 0;
+				hr := F_VN_ConvertColorSpace(ipImageRes, ipImageSrc, TCVN_CST_RGB_TO_GRAY, hr);
+			ELSIF stImageInfo.stPixelFormat.nChannels = 1 THEN				
+				hr := F_VN_ConvertColorSpace(ipImageSrc, ipImageRes, TCVN_CST_GRAY_TO_RGB, hr);
+			END_IF
+			
+			// Check if reference is available
+			IF ipKeyPointsRef <> 0 AND ipDescriptorsRef <> 0 THEN
+			
+				// Set Roi to reduce the calculation time and draw region to result image
+				hr := F_VN_SetRoi_TcVnRectangle_UDINT(stMatchingRoi, ipImageSrc, hr);
+				hr := F_VN_DrawRectangle_TcVnRectangle_UDINT(stMatchingRoi, ipImageRes, aColorBlue, 2, hr);
+					
+				hrWD := F_VN_StartRelWatchdog(tStop, S_OK);	
+					// Detect the keypoints and descriptors with the AKAZE method in the source image 	
+					hr := F_VN_KeyPointsAndDescriptorsAKAZEExp(ipImageSrc, ipKeyPointsSrc, ipDescriptorsSrc, 0, stAKAZEParams, hr);
+				hrWD := F_VN_StopWatchdog(hrWD, tRest => tRest);
+								
+				// Add Roi offset to KeyPoint positions and reset Roi
+				stRoiOffset.aPoint[0] := UDINT_TO_REAL(stMatchingRoi.nX);
+				stRoiOffset.aPoint[1] := UDINT_TO_REAL(stMatchingRoi.nY);
+				hr := F_VN_AddToContainerElements_TcVnKeyPoint(stRoiOffset, ipKeyPointsSrc, hr);
+				hr := F_VN_ResetRoi(ipImageSrc, hr);
+				
+				// Match the descriptors using the KnnBF method between the reference and the source image.
+				hr := F_VN_MatchDescriptorsKnnBFExp(ipDescriptorsRef, ipDescriptorsSrc, ipMatches, nK, 0, FALSE, TCVN_NT_HAMMING, FALSE, hr);
+				hr := FW_SafeRelease(ADR(ipDescriptorsSrc));
+				
+				// Filter descriptor matching results to get only good matches
+				hr := F_VN_FilterGoodMatches(ipMatches, ipGoodMatches, fMaxDist, fMaxKnnRatio, hr);
+				hr := FW_SafeRelease(ADR(ipMatches));
+		   
+				// Check the number of good match results and calculate a percentage 
+				hr := F_VN_GetNumberOfElements(ipGoodMatches, nNumberOfGoodMatches, hr);
+				nPercentGoodMatches := REAL_TO_ULINT(ULINT_TO_REAL(nNumberOfGoodMatches) / ULINT_TO_REAL(nNumberOfRefKeyPoints) * 100);
+				
+				// Minimun 4 points to estimate the homography matrix, 3 points for the affine transformation
+				IF nNumberOfGoodMatches >= 4 AND nPercentGoodMatches > 60 THEN
+					// Get the coordinates of the matching keypoints
+					hr := F_VN_GetMatchCoordinates(ipKeyPointsRef, ipKeyPointsSrc, ipGoodMatches, ipCoordinatesRef, ipCoordinatesSrc, hr);	
+					
+					// Estimate the affine transformation
+					hr := F_VN_GetAffineTransformation2DExp(ipCoordinatesRef, ipCoordinatesSrc, aAffineTransform, TCVN_EA_RANSAC, 3, 0, 2000, 0.9899, 0, hr);
+					hr := FW_SafeRelease(ADR(ipCoordinatesRef));
+					hr := FW_SafeRelease(ADR(ipCoordinatesSrc));
+					
+					// Get the angle of rotation and convert to degrees
+					hr := F_VN_DecomposeAffineTransformation(aAffineTransform, fRotationAngle, hr);
+					fRotationAngle := fRotationAngle * 180.0 / PI;
+					
+					// Transform the rectangle from the reference image to the location of the match and draw the resulting points
+					hr := F_VN_WarpAffine_Rectangle(0, 0, nRefImageWidth, nRefImageHeight, ipAffineRectanglePoints, aAffineTransform, hr);
+					hr := F_VN_DrawPolygon(ipAffineRectanglePoints, ipImageRes, aColorRed, 4, hr);
+
+					IF bAlignMatchRegion THEN
+						// Calculate and draw rectangle, use the affine transformated angle of rotation  
+						hr := F_VN_EnclosingRectangle(ipAffineRectanglePoints, stRectangle, hr);
+						stRectangle.fAngle := LREAL_TO_REAL(fRotationAngle);
+						hr := F_VN_DrawRotatedRectangle(stRectangle, ipImageRes, aColorGreen, 2, hr);
+						
+						// Get the matched region as new aligned image 
+						hr := F_VN_AlignRotatedImageRegion(ipImageSrc, ipImageAlignRegion, stRectangle, hr);
+						hr := F_VN_TransformIntoDisplayableImage(ipImageAlignRegion, ipImageAlignRegionDisp, hr);
+					END_IF
+					
+					// Output the rotation angle
+					sText := LREAL_TO_FMTSTR(fRotationAngle, 2, FALSE);
+					hr := F_VN_PutTextExp(sText, ipImageRes, 30, 60, TCVN_FT_HERSHEY_SIMPLEX, 2, aColorGreen, 3, TCVN_LT_8_CONNECTED, 0, hr);
+				END_IF
+	
+				// Create match image with matching results
+				IF bShowImageMatchResult AND ipImageInRef <> 0 THEN
+					hr := F_VN_DrawMatches(ipImageInRef, ipKeyPointsRef, ipImageSrc, ipKeyPointsSrc, ipGoodMatches, ipImageMatchResult, hr);
+					hr := F_VN_TransformIntoDisplayableImage(ipImageMatchResult, ipImageMatchResultDisp, hr);
+				END_IF
+			END_IF
+			
+			// Show input and result image
+			hr := F_VN_TransformIntoDisplayableImage(ipImageSrc, ipImageSrcDisp, S_OK);
+			hr := F_VN_TransformIntoDisplayableImage(ipImageRes, ipImageResDisp, hr);
+			
+			hr := FW_SafeRelease(ADR(ipKeyPointsSrc));
+			hr := FW_SafeRelease(ADR(ipGoodMatches));
+			hr := FW_SafeRelease(ADR(ipAffineRectanglePoints));
+		END_IF
+	
+	TCVN_CS_ERROR:
+		hr := fbFileSource.Reset();
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="4934" Count="24" />
+      <LineId Id="3963" Count="0" />
+      <LineId Id="3965" Count="0" />
+      <LineId Id="4092" Count="0" />
+      <LineId Id="3966" Count="7" />
+      <LineId Id="4091" Count="0" />
+      <LineId Id="5038" Count="1" />
+      <LineId Id="3974" Count="7" />
+      <LineId Id="4599" Count="0" />
+      <LineId Id="3982" Count="6" />
+      <LineId Id="4521" Count="0" />
+      <LineId Id="4600" Count="0" />
+      <LineId Id="4606" Count="0" />
+      <LineId Id="4602" Count="1" />
+      <LineId Id="4522" Count="0" />
+      <LineId Id="4520" Count="0" />
+      <LineId Id="3989" Count="0" />
+      <LineId Id="3991" Count="2" />
+      <LineId Id="4519" Count="0" />
+      <LineId Id="3994" Count="3" />
+      <LineId Id="4636" Count="0" />
+      <LineId Id="3998" Count="2" />
+      <LineId Id="4607" Count="1" />
+      <LineId Id="4003" Count="2" />
+      <LineId Id="4008" Count="3" />
+      <LineId Id="4015" Count="0" />
+      <LineId Id="4094" Count="0" />
+      <LineId Id="4101" Count="0" />
+      <LineId Id="4095" Count="0" />
+      <LineId Id="4099" Count="0" />
+      <LineId Id="4098" Count="0" />
+      <LineId Id="4097" Count="0" />
+      <LineId Id="4016" Count="0" />
+      <LineId Id="4652" Count="0" />
+      <LineId Id="4017" Count="12" />
+      <LineId Id="4654" Count="3" />
+      <LineId Id="4659" Count="0" />
+      <LineId Id="4746" Count="0" />
+      <LineId Id="4745" Count="0" />
+      <LineId Id="4660" Count="1" />
+      <LineId Id="4523" Count="0" />
+      <LineId Id="4611" Count="0" />
+      <LineId Id="4649" Count="0" />
+      <LineId Id="4646" Count="1" />
+      <LineId Id="4643" Count="0" />
+      <LineId Id="4613" Count="0" />
+      <LineId Id="4616" Count="0" />
+      <LineId Id="4524" Count="0" />
+      <LineId Id="4033" Count="2" />
+      <LineId Id="4638" Count="0" />
+      <LineId Id="4622" Count="0" />
+      <LineId Id="4645" Count="0" />
+      <LineId Id="4640" Count="0" />
+      <LineId Id="4644" Count="0" />
+      <LineId Id="4641" Count="1" />
+      <LineId Id="4639" Count="0" />
+      <LineId Id="4037" Count="0" />
+      <LineId Id="4039" Count="0" />
+      <LineId Id="4174" Count="0" />
+      <LineId Id="4040" Count="2" />
+      <LineId Id="4170" Count="0" />
+      <LineId Id="4043" Count="7" />
+      <LineId Id="4052" Count="2" />
+      <LineId Id="4056" Count="0" />
+      <LineId Id="4175" Count="1" />
+      <LineId Id="4057" Count="0" />
+      <LineId Id="4255" Count="0" />
+      <LineId Id="4247" Count="2" />
+      <LineId Id="4280" Count="0" />
+      <LineId Id="4263" Count="0" />
+      <LineId Id="4251" Count="0" />
+      <LineId Id="4744" Count="0" />
+      <LineId Id="4762" Count="0" />
+      <LineId Id="4853" Count="0" />
+      <LineId Id="4763" Count="0" />
+      <LineId Id="4841" Count="0" />
+      <LineId Id="4843" Count="0" />
+      <LineId Id="4854" Count="0" />
+      <LineId Id="4842" Count="0" />
+      <LineId Id="4760" Count="0" />
+      <LineId Id="4747" Count="0" />
+      <LineId Id="4759" Count="0" />
+      <LineId Id="4252" Count="1" />
+      <LineId Id="4061" Count="0" />
+      <LineId Id="4064" Count="2" />
+      <LineId Id="4653" Count="0" />
+      <LineId Id="4067" Count="0" />
+      <LineId Id="4172" Count="0" />
+      <LineId Id="4070" Count="0" />
+      <LineId Id="4177" Count="0" />
+      <LineId Id="4433" Count="0" />
+      <LineId Id="4276" Count="0" />
+      <LineId Id="4075" Count="1" />
+      <LineId Id="4739" Count="0" />
+      <LineId Id="4742" Count="0" />
+      <LineId Id="4740" Count="1" />
+      <LineId Id="4077" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_ScalingParams" Id="{66f79f0d-00f7-432b-8c0d-0c8f868944bf}">
+    <Declaration><![CDATA[TYPE ST_ScalingParams :
+STRUCT
+	eScalingType	: E_FeatureScalingType;
+	aCustomScaling	: ARRAY [0..18] OF LREAL := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; // The default values with 0 result in no scaling, for custom scaling please enter valid values.
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="E_FeatureScalingType" Id="{d7983fcd-8a7f-429c-9076-91467d4f6eeb}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_FeatureScalingType :
+(
+	NONE := 0,
+	MAXABS,
+	MINMAX,
+	MINMAX_EXP,
+	STANDARDIZATION,
+	CUSTOM
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

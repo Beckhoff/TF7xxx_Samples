@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_ExtractionParams" Id="{26e2a559-ac4b-462f-848c-f345560b50b1}">
+    <Declaration><![CDATA[TYPE ST_ExtractionParams :
+STRUCT
+	bUseImageFeatures	: BOOL := TRUE; 			// If true use image features, if false use contour features
+	fContourThreshold	: LREAL := 65;				// Threshold for contour extraction if active 
+	ipImageWorkDisp		: ITcVnDisplayableImage;	// Image channel for feature extraction 
+	ipImageBinaryDisp	: ITcVnDisplayableImage;	// Binary Image of threshold function if active
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,103 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="F_ExtractFeatures" Id="{5717acbc-5644-4482-8f4f-9baa52d9e83f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_ExtractFeatures : HRESULT
+VAR_INPUT
+	ipImage			:	ITcVnImage;
+	ipFeatures		:	REFERENCE TO ITcVnContainer;
+	hrPrev			:	HRESULT;
+END_VAR
+VAR
+	hr				:	HRESULT;
+	stPixelFormat	:	TcVnPixelFormat;
+	ipImageWork 	:	ITcVnImage;
+	ipContourList	:	ITcVnContainer;
+	ipIterator		:	ITcVnForwardIterator;
+	ipContour		:	ITcVnContainer;
+	fArea			:	LREAL;
+	fMaxArea		:	LREAL;
+	aCenter			:	TcVnPoint2_REAL;
+	fRadius			:	REAL;
+	aFeatures		:	ARRAY [0..1] OF LREAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF FAILED(hrPrev) THEN
+	F_ExtractFeatures := hrPrev;
+	RETURN;
+END_IF
+
+IF ipImage = 0 THEN
+	F_ExtractFeatures := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+	RETURN;
+END_IF
+
+// Convert image from RGB to Gray if nessesary
+hr := F_VN_GetPixelFormat(ipImage, stPixelFormat, hr); 
+IF stPixelFormat.nChannels = 3 AND stPixelFormat.ePixelEncoding = TCVN_PE_NONE THEN
+	hr := F_VN_ConvertColorSpace(ipImage, ipImageWork, TCVN_CST_RGB_TO_GRAY, hr);
+ELSE
+	ipImageWork := ipImage;
+	ipImage.TcAddRef();
+END_IF
+		
+// Simple feature extraction example
+hr := F_VN_Threshold(ipImageWork, ipImageWork, 220, 255, TCVN_TT_BINARY_INV, hr);
+hr := F_VN_FindContours(ipImageWork, ipContourList, hr);
+
+// Find the largest contour in the image
+hr := F_VN_GetForwardIterator(ipContourList, ipIterator, hr);
+WHILE SUCCEEDED(hr) AND_THEN ipIterator.CheckIfEnd() <> S_OK DO
+	hr := F_VN_GetContainerExp(ipIterator, ipContour, 1, hr);
+
+	hr := F_VN_ContourArea(ipContour, fArea, hr);
+	IF fArea > fMaxArea THEN
+		// Extract the features of the contour
+		aFeatures[0] := fMaxArea := fArea;
+		hr := F_VN_EnclosingCircle(ipContour, aCenter, fRadius, hr);
+		aFeatures[1] := REAL_TO_LREAL(fRadius);
+	END_IF
+END_WHILE
+
+// Create a container with all features as a vector
+hr := F_VN_CreateContainerFromArray(ADR(aFeatures), ipFeatures, ContainerType_Vector_LREAL, 2, hr);
+
+// Release interface pointer
+FW_SafeRelease(ADR(ipImageWork));
+FW_SafeRelease(ADR(ipContourList));
+FW_SafeRelease(ADR(ipIterator));
+FW_SafeRelease(ADR(ipContour));
+
+F_ExtractFeatures := hr;
+]]></ST>
+    </Implementation>
+    <LineIds Name="F_ExtractFeatures">
+      <LineId Id="23" Count="8" />
+      <LineId Id="144" Count="3" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="211" Count="2" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="152" Count="0" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="85" Count="1" />
+      <LineId Id="88" Count="4" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="111" Count="0" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="105" Count="1" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="115" Count="2" />
+      <LineId Id="190" Count="0" />
+      <LineId Id="189" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

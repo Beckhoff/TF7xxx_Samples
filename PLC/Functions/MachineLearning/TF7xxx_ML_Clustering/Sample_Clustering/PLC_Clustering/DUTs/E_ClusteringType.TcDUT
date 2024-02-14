@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="E_ClusteringType" Id="{b52dccab-d2ed-4c5e-9dae-8b721c3cc2ff}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_ClusteringType :
+(
+	KMPP := 0,
+	LBG,
+	STA
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,48 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="F_ExtractFeatures" Id="{5717acbc-5644-4482-8f4f-9baa52d9e83f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_ExtractFeatures : HRESULT
+VAR_INPUT
+	ipImage		:	ITcVnImage;
+	ipFeatures	:	REFERENCE TO ITcVnContainer;
+	hrPrev		:	HRESULT;
+END_VAR
+VAR
+	hr			:	HRESULT;
+	aAverage	:	TcVnVector4_LREAL;
+	aFeatures	:	ARRAY [0..2] OF LREAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF FAILED(hrPrev) THEN
+	F_ExtractFeatures := hrPrev;
+	RETURN;
+END_IF
+
+IF ipImage = 0 THEN
+	F_ExtractFeatures := Tc2_System.E_HRESULTAdsErr.INVALIDPARM;
+	RETURN;
+END_IF
+
+// Simple feature extraction example 
+hr := F_VN_ImageAverage(ipImage, aAverage, hr);
+
+aFeatures[0] := aAverage[0];
+aFeatures[1] := aAverage[1];
+aFeatures[2] := aAverage[2];
+
+// Create a container with all features as a vector
+hr := F_VN_CreateContainerFromArray(ADR(aFeatures), ipFeatures, ContainerType_Vector_LREAL, 3, hr);
+
+F_ExtractFeatures := hr;]]></ST>
+    </Implementation>
+    <LineIds Name="F_ExtractFeatures">
+      <LineId Id="23" Count="11" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="41" Count="2" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
