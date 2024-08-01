@@ -5,7 +5,8 @@
 {attribute 'strict'}
 TYPE E_ClassifierType :
 (
-	KNN := 0,
+	BOOST := 0,
+	KNN,
 	NBC,
 	RTrees,
 	STA,

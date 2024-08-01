@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4024.53">
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4024.54">
 	<DataTypes>
 		<DataType>
 			<Name GUID="{DB6B59A0-4FB0-4B14-A83C-AC7A76AD688D}">JobTaskId</Name>
@@ -870,6 +870,9 @@
 					<Name>docuFolder</Name>
 					<Value>Interfaces\Images</Value>
 				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
+				</Property>
 			</Properties>
 			<Hides>
 				<Hide GUID="{A11EF414-FACA-4B76-AABF-90C5A8455B82}"/>
@@ -1063,7 +1066,7 @@
 				<ReturnBitSize>32</ReturnBitSize>
 				<Parameter>
 					<Name>pipImage</Name>
-					<Comment><![CDATA[pointer to the interface pointer to be returned, might be NULL if the image acquisition failed]]></Comment>
+					<Comment><![CDATA[pointer to the interface pointer to be returned, might be 0 if the image acquisition failed]]></Comment>
 					<Type GUID="{70D42C6D-6F4E-4719-8B29-2883D5D59B1C}" PointerTo="1">ITcVnImage</Type>
 					<BitSize X64="64">32</BitSize>
 				</Parameter>
@@ -1238,6 +1241,9 @@
 					<Name>docuFolder</Name>
 					<Value>Interfaces\Containers\Iterators</Value>
 				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
+				</Property>
 			</Properties>
 			<Hides>
 				<Hide GUID="{51C309A3-D30B-4E79-BB31-E51C131FE8DB}"/>
@@ -1278,6 +1284,9 @@
 				<Property>
 					<Name>docuFolder</Name>
 					<Value>Interfaces\Containers\Iterators</Value>
+				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
 				</Property>
 			</Properties>
 			<Hides>
@@ -1374,6 +1383,9 @@
 				<Property>
 					<Name>docuFolder</Name>
 					<Value>Interfaces\Containers\Iterators</Value>
+				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
 				</Property>
 			</Properties>
 			<Hides>
@@ -1537,6 +1549,9 @@
 				<Property>
 					<Name>docuFolder</Name>
 					<Value>Interfaces\Containers</Value>
+				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
 				</Property>
 			</Properties>
 			<Hides>
@@ -1711,7 +1726,7 @@
 		</System>
 		<Plc>
 			<Project GUID="{34E7C356-E6BC-4087-AED1-6DC65B8F1BB2}" Name="PLC_Classification" PrjFilePath="PLC_Classification\PLC_Classification.plcproj" TmcFilePath="PLC_Classification\PLC_Classification.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="PLC_Classification\PLC_Classification.tmc" TmcHash="{57917C9E-4236-1088-EF20-7BB1DC0BFC0A}">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="PLC_Classification\PLC_Classification.tmc" TmcHash="{3A48B0FF-5BDD-F068-8CE7-8A8AB8BBC756}">
 					<Name>PLC_Classification Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Contexts>
@@ -1829,7 +1844,7 @@
 							</TcSmExtension>
 						</TcSmExtensions>
 					</Xml>
-					<Module Id="#x01010020" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.4.8" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010020" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
 						<Name>TrainingImages Image Acquisition (CTcIoFileImageAcquisition)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{BB647BE1-7AC0-46E5-AE93-462BDD16DE1F}" TcSmClass="CTComVisionObjDef">
@@ -1956,7 +1971,7 @@
 							</InterfacePointerValues>
 						</TmcDesc>
 					</Module>
-					<Module Id="#x01010030" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.4.8" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010030" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
 						<Name>TrainingImages Image Provider (CTcVnFileImageProvider)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{CA3A2AC6-9655-406B-B405-BFDCFD83E1BC}" TcSmClass="CTComVisionObjDef">
@@ -2046,7 +2061,7 @@
 							</TcSmExtension>
 						</TcSmExtensions>
 					</Xml>
-					<Module Id="#x01010040" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.4.8" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010040" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
 						<Name>TestImages Image Acquisition (CTcIoFileImageAcquisition)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{BB647BE1-7AC0-46E5-AE93-462BDD16DE1F}" TcSmClass="CTComVisionObjDef">
@@ -2173,7 +2188,7 @@
 							</InterfacePointerValues>
 						</TmcDesc>
 					</Module>
-					<Module Id="#x01010050" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.4.8" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010050" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
 						<Name>TestImages Image Provider (CTcVnFileImageProvider)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{CA3A2AC6-9655-406B-B405-BFDCFD83E1BC}" TcSmClass="CTComVisionObjDef">

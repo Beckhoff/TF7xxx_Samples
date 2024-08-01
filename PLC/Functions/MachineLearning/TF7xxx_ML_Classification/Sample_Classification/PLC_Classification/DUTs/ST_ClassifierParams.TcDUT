@@ -3,6 +3,11 @@
   <DUT Name="ST_ClassifierParams" Id="{c46ba47b-cd3b-4f47-b69e-0730d1f6595b}">
     <Declaration><![CDATA[TYPE ST_ClassifierParams :
 STRUCT
+	eBoostType						:	ETcVnBoostClassifierType		:=	TCVN_BCT_REAL; // optional Exp parameter
+	nBoostMaxDepth					:	UDINT							:=	1;			// optional Exp parameter
+	nBoostMinSamples				:	UDINT							:=	10;			// optional Exp parameter
+	nBoostWeakClassifiers			:	UDINT							:=	100;		// optional Exp parameter
+	fBoostWeightTrimRate			:	LREAL							:=	0.95;		// optional Exp parameter
 	nKnnK							:	UDINT 							:=	5;
 	nRTreesMaxDepth					:	UDINT							:=	5;			// optional Exp parameter
 	nRTreesMinSamples				:	UDINT							:=	10;			// optional Exp parameter

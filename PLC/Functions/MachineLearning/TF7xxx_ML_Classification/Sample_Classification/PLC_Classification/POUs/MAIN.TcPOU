@@ -3,10 +3,10 @@
   <POU Name="MAIN" Id="{ff7c706d-1307-422f-b131-cfadeb08b68f}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
-	eClassifierType		:	E_ClassifierType;		// Classification type
-	stParams			:	ST_ClassifierParams;	// Classification parameters
-	bResetModel			:	BOOL;					// Reset model to start a new training with a changed model or parameters
-	bResetTrainingData	:	BOOL;					// Reset the trained features to get new ones and train model
+	eClassifierType		:	E_ClassifierType := E_ClassifierType.KNN;	// Classification type
+	stParams			:	ST_ClassifierParams;						// Classification parameters
+	bResetModel			:	BOOL;										// Reset model to start a new training with a changed model or parameters
+	bResetTrainingData	:	BOOL;										// Reset the trained features to get new ones and train model
 	eTrainedModelType	: 	E_ClassifierType;
 	
 	hrTrain				:	HRESULT;
@@ -117,6 +117,20 @@ IF SUCCEEDED(hrTrain) AND ipSamplesTraining <> 0 AND ipClassLabels <> 0 AND ipCl
 	
 	// Create the model
 	CASE eClassifierType OF
+
+		E_ClassifierType.BOOST:
+			hrTrain := F_VN_CreateBoostClassifierExp(
+								ipMlModel				:=	ipClassifierModel,
+								eType					:=	stParams.eBoostType,
+								nMaxDepth				:=	stParams.nBoostMaxDepth,
+								nMinSamples				:=	stParams.nBoostMinSamples,
+								nWeakClassifiers		:=	stParams.nBoostWeakClassifiers,
+								fWeightTrimRate			:=	stParams.fBoostWeightTrimRate,
+								hrPrev					:=	hrTrain);
+			
+			// Change class labels from [0,1] to [-1,1] to be compatilbe with the BoostClassifier model
+			hrTrain := F_VN_MultiplyWithContainerElements1(2.0, ipClassLabelsWork, hrTrain);
+			hrTrain := F_VN_AddToContainerElements_DINT(-1, ipClassLabelsWork, hrTrain);
 		
 		E_ClassifierType.KNN:
 			hrTrain := F_VN_CreateKnnModel(
@@ -191,7 +205,7 @@ IF SUCCEEDED(hrTrain) AND ipSamplesTraining <> 0 AND ipClassLabels <> 0 AND ipCl
 								hrPrev					:=	hrTrain);
 	
 			// Change class labels from [0,1] to [-1,1] to be compatilbe with the SvmSgdClassifier model
-			hrTrain := F_VN_MultiplyWithContainerElements1(2.0, ipClassLabelsWork, hrTrain);					
+			hrTrain := F_VN_MultiplyWithContainerElements1(2.0, ipClassLabelsWork, hrTrain);
 			hrTrain := F_VN_AddToContainerElements_DINT(-1, ipClassLabelsWork, hrTrain);
 	END_CASE
 	
@@ -246,8 +260,8 @@ ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
 				// Predict classification result
 				hrTest := F_VN_PredictSampleClass(ipClassifierModel, ipSampleTest, nPredictedClass, hrTest);
 				
-				// Change predicted result for SvmSgdClassifier model and get result
-				IF eClassifierType = E_ClassifierType.SVM_SGD AND nPredictedClass < 0 THEN 
+				// Change predicted result for SvmSgdClassifier or BoostClassifier model and get result
+				IF (eClassifierType = E_ClassifierType.SVM_SGD OR eClassifierType = E_ClassifierType.BOOST) AND nPredictedClass < 0 THEN 
 					nPredictedClass := nPredictedClass + 1; 
 				END_IF
 				sLabel := CONCAT('Prediction: ',aClassNames[nPredictedClass]);
@@ -296,7 +310,11 @@ END_IF
       <LineId Id="2704" Count="0" />
       <LineId Id="2703" Count="0" />
       <LineId Id="2702" Count="0" />
-      <LineId Id="2164" Count="12" />
+      <LineId Id="2164" Count="5" />
+      <LineId Id="2743" Count="12" />
+      <LineId Id="2170" Count="0" />
+      <LineId Id="2756" Count="0" />
+      <LineId Id="2171" Count="5" />
       <LineId Id="2417" Count="0" />
       <LineId Id="2409" Count="0" />
       <LineId Id="2406" Count="0" />

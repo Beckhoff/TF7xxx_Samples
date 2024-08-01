@@ -1,0 +1,459 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MAIN" Id="{a5188f0c-d9b3-4b31-93ef-22c5c2891ae9}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	hr						: HRESULT;
+	hrGrade					: HRESULT;
+	fbCameraControl			: FB_VN_FileSourceControl;
+	eCameraState			: ETcVnCameraState;
+	sFileName				: STRING;
+	stPixelFormat			: TcVnPixelFormat;
+
+	// Images
+	ipImageIn						: ITcVnImage;
+	ipImageInDisp					: ITcVnDisplayableImage;
+	ipImageCodeResult				: ITcVnImage;
+	ipImageCodeResultDisp			: ITcVnDisplayableImage;
+	ipImageGradeResult				: ITcVnImage;
+	ipImageGradeResultDisp			: ITcVnDisplayableImage;
+	ipImageCustomVisualization		: ITcVnImage;
+	ipImageCustomVisualizationDisp	: ITcVnDisplayableImage;
+	stImageInfo						: TcVnImageInfo;
+	
+	// Watchdog
+	hrWD					: HRESULT;
+	tStop					: DINT := 50_000;
+	tRest					: DINT;
+	
+	// Grading
+	eBarcodeType			: ETcVnBarcodeType;				(* Type of the barcode (supported: CODE39, CODE128, EAN8, EAN13, ITF, UPCA, UPCE) *)
+	eSearchDirection		: ETcVnBarcodeSearchDirection;	(* Barcode search direction (BSD_ANY first tries horizontal, then vertical) *)
+	fModuleWidth			: REAL;							(* Minimum module width of the code in the image (in pixels). Must be at least 3, preferably 5 - 8. *)
+	ipDecodedData			: ITcVnContainer;
+	stCodeGrades1D			: TcVnCodeGrades1D;
+	stCodeGradesDM			: TcVnCodeGradesDM;
+	stCodeGradesQR			: TcVnCodeGradesQR;
+	ipResultVisualization	: ITcVnImage;
+	ipContour				: ITcVnContainer;
+	fRotationAngleDeg		: REAL;
+	
+	// Result
+	fFontScale				: LREAL;
+	sGradeResult			: STRING(255);
+	fGradeResult			: REAL;	
+	sCodeResult				: STRING(255);
+	sText					: STRING(255);
+	aTextColor				: TcVnVector4_LREAL;
+	aColorWhite				: TcVnVector4_LREAL := [255, 255, 255];
+	aColorRed				: TcVnVector4_LREAL := [255, 0, 0];
+	aColorGreen				: TcVnVector4_LREAL := [0, 255, 0];
+	aColorBlue				: TcVnVector4_LREAL := [0, 165, 255];
+	aColorOrange			: TcVnVector4_LREAL := [255, 165, 0];
+	
+	// Custom visualization 
+	ipScanLineInfo			: ITcVnContainer;
+	nNumberOfElements		: ULINT;
+	aScanLineInfo			: ARRAY [0..9] OF TcVnVector3_REAL;
+	nScanLineIndex			: USINT := 0;
+	aStartPoint				: TcVnPoint2_REAL;
+	aEndPoint				: TcVnPoint2_REAL;	
+	aThresholdLine			: TcVnVector4_DINT;
+	fIntensityProfileHeight	: REAL := 511;
+	ipMarginGrades			: ITcVnContainer;
+	ipIterator				: ITcVnForwardIterator;
+	ipAccess     			: ITcVnAccess_TcVnVector3_REAL;
+	aElement				: TcVnVector3_REAL;
+	nNumberOfBadModuls		: ULINT;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Disclaimer
+
+// This publication contains statements about the suitability of our products for certain
+// areas of application. These statements are based on typical features of our products.
+// The examples shown in this publication are for demonstration purposes only.
+// The information provided herein should not be regarded as specific operation characteristics.
+// It is incumbent on the customer to check and decide whether a product is suitable for use
+// in a particular application. We do not give any warranty that the source code which is
+// made available with this publication is complete or accurate.
+
+// THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND,
+// EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY WITH RESPECT TO NON-INFRINGEMENT,
+// FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR FITNESS FOR ANY PARTICULAR PURPOSE.
+
+// This publication may be changed from time to time without prior notice.
+// No liability is assumed for errors and/or omissions.
+// Our products are described in detail in our data sheets and documentations.
+// Product-specific warnings and cautions must be observed.
+// For the latest version of our data sheets and documentations visit our website (www.beckhoff.de).
+
+// © Beckhoff Automation GmbH & Co. KG, July 2024
+
+// The reproduction, distribution and utilization of this document as well as the communication
+// of its contents to others without express authorization is prohibited. 
+// Offenders will be held liable for the payment of damages.
+// All rights reserved in the event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+// SAMPLE - Code Quality
+//	-------------------------------------------------------
+
+// Steps To Do:
+// ------------
+// 1. Add the images to the FileSource control
+// 2. Activate the configuration -> Start TwinCAT system and PLC to run
+// 3. Watch the results in the ADS Image Watch
+// 4. Compare the different result and custom visualization images.
+//    If ipResultVisualization, ipScanLineInfo or ipMarginGrades are not required, set to 0, which saves processing time of the function or the additional evaluation. 
+
+// Get camera state
+eCameraState := fbCameraControl.GetState();
+
+// CameraControl is in error state
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+
+// Camera not yet streaming
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.GetCurrentImageAndFileName(ipImage := ipImageIn, sFileName := sFileName, 80);
+
+	// Check if new image was received
+	IF SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+
+		// Check if the input image matches the implementation of the sample code; a 1-channel gray value image is expected.
+		// Alternatively implement the needed color space transformation yourself.
+		hr := F_VN_GetPixelFormat(ipImageIn, stPixelFormat, hr);
+		IF stPixelFormat.nChannels <> 1 OR stPixelFormat.ePixelEncoding <> TCVN_PE_NONE THEN
+			hr := Tc2_System.E_HRESULTAdsErr.INCOMPATIBLE;
+		END_IF
+		
+		// Check if 1D barcode image and set type 
+		IF INT_TO_BOOL(Find(sFileName, 'Code128')) THEN
+			eBarcodeType := ETcVnBarcodeType.TCVN_BT_CODE128;
+		ELSIF INT_TO_BOOL(Find(sFileName, 'EAN13')) THEN
+			eBarcodeType := ETcVnBarcodeType.TCVN_BT_EAN13;
+		ELSE
+			eBarcodeType := ETcVnBarcodeType.TCVN_BT_ANY;
+		END_IF
+
+		hrWD := F_VN_StartRelWatchdog(tStop, S_OK);
+			IF eBarcodeType <> ETcVnBarcodeType.TCVN_BT_ANY THEN
+	
+				// Grade 1D barcodes
+				hrGrade := F_VN_GradeBarcodeExp(
+								ipSrcImage				:= ipImageIn, 
+								ipDecodedData			:= ipDecodedData, 
+								stCodeGrades			:= stCodeGrades1D, 
+								eBarcodeType			:= eBarcodeType, 
+								eSearchDirection		:= eSearchDirection,
+								ipResultVisualization	:= ipResultVisualization, 
+								ipScanLineInfo			:= ipScanLineInfo,
+								ipContour				:= ipContour,
+								hrPrev					:= hr,
+								fAngleDeg				=> fRotationAngleDeg);
+	
+				// Get overall result grade
+				sGradeResult := CONCAT('Code Grade: ', REAL_TO_STRING(stCodeGrades1D.fOverall));
+				fGradeResult := stCodeGrades1D.fOverall;
+	
+			ELSIF INT_TO_BOOL(Find(sFileName, 'DM')) THEN
+	
+				// Set module with according to image resoulution
+				IF INT_TO_BOOL(Find(sFileName, '1')) OR INT_TO_BOOL(Find(sFileName, '2')) THEN 
+					fModuleWidth := 4;
+				ELSE
+					fModuleWidth := 9;
+				END_IF
+	
+				// Grade 2D data matrix code
+				hrGrade := F_VN_GradeDataMatrixCodeExp(
+								ipSrcImage				:= ipImageIn, 
+								ipDecodedData			:= ipDecodedData, 
+								stCodeGrades			:= stCodeGradesDM, 
+								fModuleWidth			:= fModuleWidth, 
+								ipResultVisualization	:= ipResultVisualization, 
+								ipMarginGrades			:= ipMarginGrades,
+								ipContour				:= ipContour,
+								hrPrev					:= hr,
+								fAngleDeg				=> fRotationAngleDeg);
+							
+				// Get overall result grade
+				sGradeResult := CONCAT('Code Grade: ', USINT_TO_STRING(stCodeGradesDM.nOverall));
+				fGradeResult := USINT_TO_REAL(stCodeGradesDM.nOverall);
+	
+			ELSIF INT_TO_BOOL(Find(sFileName, 'QR')) THEN
+	
+				// Set module with according to image resoulution
+				fModuleWidth := 4;
+	
+				// Grade 2D QR code
+				hrGrade := F_VN_GradeQRCodeExp(
+								ipSrcImage				:= ipImageIn, 
+								ipDecodedData			:= ipDecodedData, 
+								stCodeGrades			:= stCodeGradesQR, 
+								fModuleWidth			:= fModuleWidth, 
+								ipResultVisualization	:= ipResultVisualization, 
+								ipMarginGrades			:= ipMarginGrades,
+								ipContour				:= ipContour,
+								hrPrev					:= hr,
+								fAngleDeg				=> fRotationAngleDeg);
+	
+				// Get overall result grade
+				sGradeResult := CONCAT('Code Grade: ', USINT_TO_STRING(stCodeGradesQR.nOverall));
+				fGradeResult := USINT_TO_REAL(stCodeGradesQR.nOverall);
+			END_IF
+		hrWD := F_VN_StopWatchdog(hrWD, tRest => tRest);
+
+		IF SUCCEEDED(hrGrade) THEN
+			// Export Code into String
+			hr := F_VN_ExportContainer_String(ipDecodedData, sCodeResult, 255, hr);
+			
+			// Create code result image
+			hr := F_VN_ConvertColorSpace(ipImageIn, ipImageCodeResult, ETcVnColorSpaceTransform.TCVN_CST_GRAY_TO_RGB, hr);
+			// Draw code contour 
+			hr := F_VN_DrawContours(ipContour, 0, ipImageCodeResult, aColorGreen, 2, hr);
+			// Write angle result to image
+			sText := CONCAT('Rotation angle: ', REAL_TO_STRING(fRotationAngleDeg));
+			hr := F_VN_PutTextExp(sText, ipImageCodeResult, 5, 10, TCVN_FT_HERSHEY_SIMPLEX, 0.4, aColorBlue, 1, TCVN_LT_8_CONNECTED, FALSE, hr);
+
+			// Create grading result image
+			hr := F_VN_GetImageInfo(ipResultVisualization, stImageInfo, hr);
+			hr := F_VN_CreateImageAndSetPixels(ipImageGradeResult, stImageInfo.nWidth + 60, stImageInfo.nHeight + 80, ETcVnElementType.TCVN_ET_USINT, 3, aColorWhite, hr);
+			hr := F_VN_CopyImageRegionToRegion(ipResultVisualization, 0, 0, stImageInfo.nWidth, stImageInfo.nHeight, ipImageGradeResult, 30, 70, hr);
+	
+			// Adapt font scale to image size
+			fFontScale := LIMIT(0.6, UDINT_TO_LREAL(stImageInfo.nWidth) * 0.0032, 2.2);
+	
+			// Select text color according to grade result
+			IF fGradeResult >= 3 THEN
+				aTextColor := aColorGreen;
+			ELSIF fGradeResult >= 2 THEN
+				aTextColor := aColorBlue;
+			ELSIF fGradeResult >= 1 THEN
+				aTextColor := aColorOrange;
+			ELSE
+				aTextColor := aColorRed;
+			END_IF
+	
+			// Write grade result to image
+			hr := F_VN_PutTextExp(sGradeResult, ipImageGradeResult, 20, 58, TCVN_FT_HERSHEY_SIMPLEX, fFontScale, aTextColor, 2, TCVN_LT_8_CONNECTED, FALSE, hr);
+		
+			// Create a custom visualization to check the intensity profile of one scan line
+			IF ipScanLineInfo <> 0 THEN
+				// Scan line information, ContainerType_Vector_TcVnVector3_REAL, containing [row index, overall grade, threshold]
+				hr := F_VN_GetNumberOfElements(ipScanLineInfo, nNumberOfElements, hr);
+				IF nNumberOfElements <= 10 THEN
+					hr := F_VN_ExportContainer(ipScanLineInfo, ADR(aScanLineInfo), SIZEOF(aScanLineInfo), hr);
+					
+					// Calculate the start and end points for the plot and for the threshold line according to the orientaion
+					IF fRotationAngleDeg = 0 OR fRotationAngleDeg = 180 THEN
+						aStartPoint[0] := 0;
+						aStartPoint[1] := aScanLineInfo[nScanLineIndex][0];
+						aEndPoint[0] := UDINT_TO_REAL(stImageInfo.nWidth - 1);
+						aEndPoint[1] := aScanLineInfo[nScanLineIndex][0];
+						aThresholdLine[2] := (UDINT_TO_DINT(stImageInfo.nWidth) - 1) * 2;
+					ELSE
+						aStartPoint[0] := aScanLineInfo[nScanLineIndex][0];
+						aStartPoint[1] := 0;
+						aEndPoint[0] := aScanLineInfo[nScanLineIndex][0];
+						aEndPoint[1] := UDINT_TO_REAL(stImageInfo.nHeight - 1);
+						aThresholdLine[2] := (UDINT_TO_DINT(stImageInfo.nHeight) -1) * 2;
+					END_IF
+					
+					aThresholdLine[0] := 0;
+					aThresholdLine[1] := REAL_TO_DINT(fIntensityProfileHeight - 1 - (aScanLineInfo[nScanLineIndex][2] * 2));
+					aThresholdLine[3] := REAL_TO_DINT(fIntensityProfileHeight - 1 - (aScanLineInfo[nScanLineIndex][2] * 2));	
+						
+					// Create the intensity Plot and draw the threshold line
+					hr := F_VN_PlotIntensityProfile(ipImageIn, ipImageCustomVisualization, aStartPoint, aEndPoint, hr);
+					hr := F_VN_DrawLine_TcVnVector4_DINT(aThresholdLine, ipImageCustomVisualization, aColorWhite, 2, hr);
+				END_IF
+			END_IF
+			
+			// Create a custom visualization e.g. to show the modules with grades < 3 
+			IF ipMarginGrades <> 0 THEN
+				// Create custom visualization image
+				hr := F_VN_ConvertColorSpace(ipImageIn, ipImageCustomVisualization, ETcVnColorSpaceTransform.TCVN_CST_GRAY_TO_RGB, hr);
+				
+				// Individual margin grade for each module, ContainerType_Vector_TcVnVector3_REAL, containing [x-position, y-position, grade]
+				hr := F_VN_GetNumberOfElements(ipMarginGrades, nNumberOfElements, hr);
+				IF nNumberOfElements > 0 THEN
+					nNumberOfBadModuls := 0;
+					// Get iterator and access
+					hr := F_VN_GetForwardIterator(ipMarginGrades, ipIterator, hr);
+					IF SUCCEEDED(hr) AND ipIterator <> 0 THEN
+						hr := ipIterator.TcQueryInterface(IID_ITcVnAccess_TcVnVector3_REAL, ADR(ipAccess));
+						IF SUCCEEDED(hr) AND ipAccess <> 0 THEN
+							// Iterate through the container, draw and count all modules that have a grade less than 3
+							WHILE SUCCEEDED(hr) AND_THEN ipIterator.CheckIfEnd() <> S_OK DO
+								hr := ipAccess.Get(aElement);
+								IF aElement[2] < 3 THEN
+									hr := F_VN_DrawPoint(REAL_TO_UDINT(aElement[0]), REAL_TO_UDINT(aElement[1]), ipImageCustomVisualization, ETcVnDrawShape.TCVN_DS_PLUS, aColorOrange, hr);
+									nNumberOfBadModuls := nNumberOfBadModuls + 1;
+								END_IF
+								IF SUCCEEDED(hr) THEN
+									hr := ipIterator.Increment();
+								END_IF
+							END_WHILE
+						END_IF
+					END_IF
+					// Write count result to image
+					sText := CONCAT('Modules < 3: ', ULINT_TO_STRING(nNumberOfBadModuls));
+					hr := F_VN_PutTextExp(sText, ipImageCustomVisualization, 5, 10, TCVN_FT_HERSHEY_SIMPLEX, 0.4, aColorBlue, 1, TCVN_LT_8_CONNECTED, FALSE, hr);
+				END_IF		
+			END_IF		
+		END_IF
+				
+		// Display images and release pointer
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, S_OK);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageCodeResult, ipImageCodeResultDisp, S_OK);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageGradeResult, ipImageGradeResultDisp, S_OK);
+		hr := F_VN_TransformIntoDisplayableImage(ipImageCustomVisualization, ipImageCustomVisualizationDisp, hr);
+		FW_SafeRelease(ADR(ipDecodedData));
+		FW_SafeRelease(ADR(ipResultVisualization));
+		FW_SafeRelease(ADR(ipContour));
+		FW_SafeRelease(ADR(ipScanLineInfo));
+		FW_SafeRelease(ADR(ipMarginGrades));
+		FW_SafeRelease(ADR(ipIterator));
+		FW_SafeRelease(ADR(ipAccess));
+    END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="6" Count="35" />
+      <LineId Id="280" Count="0" />
+      <LineId Id="540" Count="0" />
+      <LineId Id="706" Count="0" />
+      <LineId Id="52" Count="13" />
+      <LineId Id="152" Count="0" />
+      <LineId Id="67" Count="2" />
+      <LineId Id="610" Count="0" />
+      <LineId Id="698" Count="0" />
+      <LineId Id="702" Count="0" />
+      <LineId Id="614" Count="0" />
+      <LineId Id="611" Count="1" />
+      <LineId Id="270" Count="0" />
+      <LineId Id="613" Count="0" />
+      <LineId Id="155" Count="0" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="161" Count="0" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="175" Count="1" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="321" Count="0" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="159" Count="0" />
+      <LineId Id="273" Count="0" />
+      <LineId Id="160" Count="0" />
+      <LineId Id="80" Count="6" />
+      <LineId Id="374" Count="2" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="276" Count="0" />
+      <LineId Id="198" Count="0" />
+      <LineId Id="197" Count="0" />
+      <LineId Id="237" Count="0" />
+      <LineId Id="242" Count="0" />
+      <LineId Id="187" Count="1" />
+      <LineId Id="271" Count="0" />
+      <LineId Id="230" Count="0" />
+      <LineId Id="225" Count="4" />
+      <LineId Id="274" Count="0" />
+      <LineId Id="189" Count="5" />
+      <LineId Id="368" Count="2" />
+      <LineId Id="195" Count="0" />
+      <LineId Id="200" Count="0" />
+      <LineId Id="277" Count="0" />
+      <LineId Id="199" Count="0" />
+      <LineId Id="239" Count="0" />
+      <LineId Id="202" Count="0" />
+      <LineId Id="201" Count="0" />
+      <LineId Id="272" Count="0" />
+      <LineId Id="268" Count="0" />
+      <LineId Id="203" Count="0" />
+      <LineId Id="269" Count="0" />
+      <LineId Id="275" Count="0" />
+      <LineId Id="206" Count="5" />
+      <LineId Id="371" Count="2" />
+      <LineId Id="212" Count="0" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="278" Count="0" />
+      <LineId Id="224" Count="0" />
+      <LineId Id="241" Count="0" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="327" Count="0" />
+      <LineId Id="380" Count="0" />
+      <LineId Id="389" Count="0" />
+      <LineId Id="391" Count="0" />
+      <LineId Id="390" Count="0" />
+      <LineId Id="503" Count="0" />
+      <LineId Id="618" Count="0" />
+      <LineId Id="504" Count="1" />
+      <LineId Id="387" Count="0" />
+      <LineId Id="632" Count="0" />
+      <LineId Id="700" Count="0" />
+      <LineId Id="699" Count="0" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="95" Count="4" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="714" Count="0" />
+      <LineId Id="234" Count="0" />
+      <LineId Id="267" Count="0" />
+      <LineId Id="254" Count="5" />
+      <LineId Id="262" Count="1" />
+      <LineId Id="253" Count="0" />
+      <LineId Id="285" Count="0" />
+      <LineId Id="246" Count="0" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="526" Count="0" />
+      <LineId Id="397" Count="5" />
+      <LineId Id="527" Count="0" />
+      <LineId Id="403" Count="4" />
+      <LineId Id="410" Count="0" />
+      <LineId Id="412" Count="4" />
+      <LineId Id="419" Count="0" />
+      <LineId Id="421" Count="0" />
+      <LineId Id="604" Count="0" />
+      <LineId Id="532" Count="1" />
+      <LineId Id="422" Count="0" />
+      <LineId Id="535" Count="0" />
+      <LineId Id="528" Count="0" />
+      <LineId Id="423" Count="3" />
+      <LineId Id="434" Count="2" />
+      <LineId Id="606" Count="0" />
+      <LineId Id="438" Count="0" />
+      <LineId Id="541" Count="0" />
+      <LineId Id="605" Count="0" />
+      <LineId Id="440" Count="2" />
+      <LineId Id="703" Count="0" />
+      <LineId Id="443" Count="3" />
+      <LineId Id="704" Count="0" />
+      <LineId Id="447" Count="11" />
+      <LineId Id="705" Count="0" />
+      <LineId Id="542" Count="1" />
+      <LineId Id="459" Count="0" />
+      <LineId Id="393" Count="0" />
+      <LineId Id="396" Count="0" />
+      <LineId Id="616" Count="0" />
+      <LineId Id="72" Count="1" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="631" Count="0" />
+      <LineId Id="524" Count="0" />
+      <LineId Id="124" Count="1" />
+      <LineId Id="506" Count="0" />
+      <LineId Id="520" Count="0" />
+      <LineId Id="537" Count="2" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="279" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
