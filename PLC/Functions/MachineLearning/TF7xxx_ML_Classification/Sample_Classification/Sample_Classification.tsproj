@@ -1844,7 +1844,7 @@
 							</TcSmExtension>
 						</TcSmExtensions>
 					</Xml>
-					<Module Id="#x01010020" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010020" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
 						<Name>TrainingImages Image Acquisition (CTcIoFileImageAcquisition)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{BB647BE1-7AC0-46E5-AE93-462BDD16DE1F}" TcSmClass="CTComVisionObjDef">
@@ -1971,7 +1971,7 @@
 							</InterfacePointerValues>
 						</TmcDesc>
 					</Module>
-					<Module Id="#x01010030" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010030" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
 						<Name>TrainingImages Image Provider (CTcVnFileImageProvider)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{CA3A2AC6-9655-406B-B405-BFDCFD83E1BC}" TcSmClass="CTComVisionObjDef">
@@ -2061,7 +2061,7 @@
 							</TcSmExtension>
 						</TcSmExtensions>
 					</Xml>
-					<Module Id="#x01010040" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010040" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
 						<Name>TestImages Image Acquisition (CTcIoFileImageAcquisition)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{BB647BE1-7AC0-46E5-AE93-462BDD16DE1F}" TcSmClass="CTComVisionObjDef">
@@ -2188,7 +2188,7 @@
 							</InterfacePointerValues>
 						</TmcDesc>
 					</Module>
-					<Module Id="#x01010050" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010050" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
 						<Name>TestImages Image Provider (CTcVnFileImageProvider)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{CA3A2AC6-9655-406B-B405-BFDCFD83E1BC}" TcSmClass="CTComVisionObjDef">

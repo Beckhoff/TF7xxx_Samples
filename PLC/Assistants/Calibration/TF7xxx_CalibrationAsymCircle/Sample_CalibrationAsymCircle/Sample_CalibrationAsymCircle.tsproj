@@ -4252,7 +4252,7 @@
 							</TcSmExtension>
 						</TcSmExtensions>
 					</Xml>
-					<Module Id="#x01010030" Disabled="true" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010030" Disabled="true" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
 						<Name>Camera1 Image Acquisition (CGevImageAcquisition)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{8B8C3693-0B4E-4D00-A22A-AFC6977207C3}" TcSmClass="CTComVisionObjDef">
@@ -4465,7 +4465,7 @@
 								</Value>
 							</InterfacePointerValues>
 						</TmcDesc>
-						<Module Id="#x01010040" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
+						<Module Id="#x01010040" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
 							<Name>Gvcp Module (CGvcpProtocol)</Name>
 							<ImageId>1000</ImageId>
 							<TmcDesc GUID="{A2F12437-8A89-453B-BAFC-5E9934B8C8DC}" TcSmClass="CTComVisionObjDef">
@@ -4607,7 +4607,7 @@
 								</ParameterValues>
 							</TmcDesc>
 						</Module>
-						<Module Id="#x01010050" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
+						<Module Id="#x01010050" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
 							<Name>Gvsp Module (CGvspProtocol)</Name>
 							<ImageId>1000</ImageId>
 							<TmcDesc GUID="{9D2B8D47-8462-4251-80A0-5AA35A79EF48}" TcSmClass="CTComVisionObjDef">
@@ -4826,7 +4826,7 @@
 							</TmcDesc>
 						</Module>
 					</Module>
-					<Module Id="#x01010060" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010060" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
 						<Name>Camera1 Image Acquisition Simulation (CGevImageAcquisitionSimulation)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{F6C5A2D8-F17E-45DE-A68A-B78B3B54B4EC}" TcSmClass="CTComVisionObjDef">
@@ -4964,7 +4964,7 @@
 							</InterfacePointerValues>
 						</TmcDesc>
 					</Module>
-					<Module Id="#x01010070" Disabled="true" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010070" Disabled="true" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcIoGigEVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
 						<Name>Camera1 Ads Communicator (CGevAdsCommunicator)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{D3AC2B42-00B6-4F04-B20D-A1A9E3949D9B}" TcSmClass="CTComVisionObjDef">
@@ -5072,7 +5072,7 @@
 							</InterfacePointerValues>
 						</TmcDesc>
 					</Module>
-					<Module Id="#x01010080" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.5.10" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010080" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
 						<Name>Camera1 Image Provider (CGevImageProvider)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{F81ECC63-F412-4CF1-ABEC-DA193F5F64AE}" TcSmClass="CTComVisionObjDef">

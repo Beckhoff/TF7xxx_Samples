@@ -1,0 +1,222 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="MAIN" Id="{972f74f9-c431-4101-b500-8138c798d77c}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR CONSTANT
+	cModelInputChannels		: UDINT := 3;
+	cModelInputWidth		: UDINT := 224;
+	cModelInputHeight		: UDINT := 224;
+	cMaxPixelValue			: UDINT := 255;
+	cNumberOfClasses		: UDINT := 3;
+END_VAR
+VAR
+	hr						: HRESULT;
+	fbCameraControl			: FB_VN_SimpleCameraControl;
+	eCameraState			: ETcVnCameraState;
+	
+	// Load Model
+	sFolderPath				: STRING(255) := 'C:\Git\TF7xxx_Samples\Images\Functions\NeuralNetwork\TF7xxx_NeuralNetwork\';
+	sFilePath				: STRING(255);
+	fbReadDnn				: FB_VN_ReadNeuralNetwork;
+	ipDnnModel				: ITcVnNeuralNetwork;
+	bDnnModelInitialized	: BOOL := FALSE;
+	nReturnCode				: UDINT;
+
+	// Model information
+	sFileName				: STRING(255) := 'LemonModel.onnx';
+	sClassLabels			: ARRAY[0..cNumberOfClasses] OF STRING := ['Bad quality: ', 'Empty background: ', 'Good quality: '];
+	aMean					: TcVnVector4_LREAL := [0.485, 0.456, 0.406];
+	aStd					: TcVnVector4_LREAL := [0.229, 0.224, 0.225];
+	ePaddingMode			: ETcVnPaddingMode := TCVN_PM_CROP_CENTER;
+	eInterpolationType		: ETcVnInterpolationType := TCVN_IT_BILINEAR;
+	
+	// Images
+	ipImageIn				: ITcVnImage;
+	ipImageInDisp			: ITcVnDisplayableImage;
+	stPixelFormat			: TcVnPixelFormat;
+	ipTensorImage      		: ITcVnImage;
+	ipDnnOutputImage	  	: ITcVnImage;
+	
+	// Result
+	aConfidence				: TcVnVector4_LREAL;
+	aClassIndex				: TcVnPoint2_DINT;
+	sResult					: STRING(255);
+	aWhite					: TcVnVector4_LREAL := [255, 255, 255];
+	aBlack					: TcVnVector4_LREAL := [0, 0, 0];
+	
+	// Execution Time
+	tStartDC			: T_DCTIME64;
+    tStoppDC			: T_DCTIME64;
+	lrDuration			: LREAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Disclaimer
+
+// This publication contains statements about the suitability of our products for certain
+// areas of application. These statements are based on typical features of our products.
+// The examples shown in this publication are for demonstration purposes only.
+// The information provided herein should not be regarded as specific operation characteristics.
+// It is incumbent on the customer to check and decide whether a product is suitable for use
+// in a particular application. We do not give any warranty that the source code which is
+// made available with this publication is complete or accurate.
+
+// THE SAMPLE CODE CONTAINED IN THIS PUBLICATION IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND,
+// EITHER EXPRESSED, IMPLIED OR STATUTORY, INCLUDING WITHOUT LIMITATION, ANY WARRANTY WITH RESPECT TO NON-INFRINGEMENT,
+// FREEDOM FROM PROPRIETARY RIGHTS OF THIRD PARTIES OR FITNESS FOR ANY PARTICULAR PURPOSE.
+
+// This publication may be changed from time to time without prior notice.
+// No liability is assumed for errors and/or omissions.
+// Our products are described in detail in our data sheets and documentations.
+// Product-specific warnings and cautions must be observed.
+// For the latest version of our data sheets and documentations visit our website (www.beckhoff.de).
+
+// © Beckhoff Automation GmbH & Co. KG, November 2024
+
+// The reproduction, distribution and utilization of this document as well as the communication
+// of its contents to others without express authorization is prohibited. 
+// Offenders will be held liable for the payment of damages.
+// All rights reserved in the event of the grant of a patent, utility model or design.
+
+//	==========================================================================================
+
+// SAMPLE - Neural Network
+//	-------------------------------------------------------
+
+// Steps To Do:
+// ------------
+// 1. Add the images to the FileSource control
+// 2. Adapt the sFolderPath to the ONNX file location
+// 3. Activate the configuration -> Start TwinCAT system and PLC to run
+// 4. Watch the results in the ADS Image Watch
+
+// Load Dnn model
+IF NOT bDnnModelInitialized THEN
+	sFilePath := CONCAT (sFolderPath,sFileName);
+	FW_SafeRelease(ADR(ipDnnModel));
+	fbReadDnn(sFilePath := sFilePath, ipDestNeuralNetwork := ipDnnModel, bRead := TRUE);
+	
+	IF NOT fbReadDnn.bBusy THEN
+		fbReadDnn(sFilePath:='', bRead := FALSE);
+		IF NOT fbReadDnn.bError THEN
+			bDnnModelInitialized := TRUE;
+		END_IF
+		nReturnCode := fbReadDnn.nErrorId AND 16#FFF;
+	END_IF
+END_IF
+
+// Get camera state
+eCameraState := fbCameraControl.GetState();
+
+// CameraControl is in error state
+IF eCameraState = TCVN_CS_ERROR THEN
+	hr := fbCameraControl.Reset();
+
+// Camera not yet streaming
+ELSIF eCameraState < TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.StartAcquisition();
+
+// Camera streaming
+ELSIF eCameraState = TCVN_CS_ACQUIRING THEN
+	hr := fbCameraControl.GetCurrentImage(ipImageIn);
+
+	// Check if new image was received
+	IF bDnnModelInitialized AND SUCCEEDED(hr) AND ipImageIn <> 0 THEN
+		hr := F_VN_GetPixelFormat(ipImageIn, stPixelFormat, hr);
+		
+		// Check if input image channels matches the model requirements, alternative implement the needed color space transformation yourself.
+		IF stPixelFormat.nChannels <> cModelInputChannels OR stPixelFormat.ePixelEncoding <> TCVN_PE_NONE THEN
+			hr := Tc2_System.E_HRESULTAdsErr.INCOMPATIBLE;
+		END_IF
+
+		// Get DC starttime
+		tStartDC := F_GetActualDcTime64();
+	
+		// *** Preprocessing steps ***
+		// Adjust the dimensions of the input image to match the model input requirements
+		hr := F_VN_ResizeImageExp(ipImageIn, ipTensorImage, cModelInputWidth, cModelInputHeight, eInterpolationType, ePaddingMode, aBlack, hr);
+		
+		// Convert the image to type REAL and scale to the range [0.0, 1.0]
+		hr := F_VN_ConvertElementTypeExp(ipTensorImage, ipTensorImage, TCVN_ET_REAL, 1.0 / UDINT_TO_REAL(cMaxPixelValue), 0, hr);
+		
+		// Normalization
+		hr := F_VN_SubtractVectorFromImage(ipTensorImage, aMean, ipTensorImage,hr);
+		hr := F_VN_DivideImageByVector(ipTensorImage, aStd, ipTensorImage, hr);
+		
+		// Convert the input image to 4D Tensor
+		hr := F_VN_ConvertDataLayout(ipTensorImage, ipTensorImage, TCVN_DL_DEFAULT, TCVN_DL_4D_NCHW, hr);
+		
+		// *** Model execution ***
+		hr := F_VN_ExecuteNeuralNetwork(ipDnnModel, ipTensorImage, ipDnnOutputImage, hr);
+		
+		// *** Postprocessing steps ***
+		// Converts the raw result values into probability estimates
+		hr := F_VN_SoftMax(ipDnnOutputImage, ipDnnOutputImage, FALSE, hr);
+		// Get best classfication result
+		hr := F_VN_MaxPixelValue(ipDnnOutputImage, aConfidence , aClassIndex, hr);
+
+		// Result visualization
+		sResult := CONCAT(sClassLabels[aClassIndex[0]] , LREAL_TO_FMTSTR(aConfidence[0], 2, FALSE));
+		hr := F_VN_PutLabelExp(sResult, ipImageIn, 5, 15, 1, 1, TCVN_FT_HERSHEY_PLAIN, aBlack, aWhite, TCVN_LT_4_CONNECTED, hr);	
+
+		// Execution Time
+		tStoppDC := F_GetActualDcTime64();
+		lrDuration := (ULINT_TO_LREAL(tStoppDC - tStartDC) / 1000000.0); // ms
+		
+		// Display images and release pointer
+		hr := F_VN_TransformIntoDisplayableImage(ipImageIn, ipImageInDisp, S_OK);
+		FW_SafeRelease(ADR(ipTensorImage));
+		FW_SafeRelease(ADR(ipDnnOutputImage));	
+    END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="45" Count="34" />
+      <LineId Id="376" Count="0" />
+      <LineId Id="80" Count="1" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="136" Count="9" />
+      <LineId Id="147" Count="1" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="153" Count="0" />
+      <LineId Id="127" Count="0" />
+      <LineId Id="83" Count="12" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="111" Count="1" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="169" Count="5" />
+      <LineId Id="434" Count="0" />
+      <LineId Id="431" Count="0" />
+      <LineId Id="225" Count="0" />
+      <LineId Id="432" Count="0" />
+      <LineId Id="216" Count="2" />
+      <LineId Id="330" Count="0" />
+      <LineId Id="219" Count="1" />
+      <LineId Id="331" Count="0" />
+      <LineId Id="221" Count="2" />
+      <LineId Id="332" Count="0" />
+      <LineId Id="224" Count="0" />
+      <LineId Id="214" Count="0" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="215" Count="0" />
+      <LineId Id="242" Count="1" />
+      <LineId Id="246" Count="0" />
+      <LineId Id="439" Count="0" />
+      <LineId Id="430" Count="0" />
+      <LineId Id="438" Count="0" />
+      <LineId Id="250" Count="3" />
+      <LineId Id="198" Count="0" />
+      <LineId Id="429" Count="0" />
+      <LineId Id="426" Count="1" />
+      <LineId Id="273" Count="0" />
+      <LineId Id="428" Count="0" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="244" Count="1" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="31" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
