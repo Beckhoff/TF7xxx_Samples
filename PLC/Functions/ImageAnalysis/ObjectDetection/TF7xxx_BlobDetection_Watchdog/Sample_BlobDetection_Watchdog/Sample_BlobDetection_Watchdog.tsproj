@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4024.12">
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4024.62">
 	<DataTypes>
 		<DataType>
 			<Name GUID="{DB6B59A0-4FB0-4B14-A83C-AC7A76AD688D}">JobTaskId</Name>
@@ -870,6 +870,9 @@
 					<Name>docuFolder</Name>
 					<Value>Interfaces\Images</Value>
 				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
+				</Property>
 			</Properties>
 			<Hides>
 				<Hide GUID="{A11EF414-FACA-4B76-AABF-90C5A8455B82}"/>
@@ -1063,7 +1066,7 @@
 				<ReturnBitSize>32</ReturnBitSize>
 				<Parameter>
 					<Name>pipImage</Name>
-					<Comment><![CDATA[pointer to the interface pointer to be returned, might be NULL if the image acquisition failed]]></Comment>
+					<Comment><![CDATA[pointer to the interface pointer to be returned, might be 0 if the image acquisition failed]]></Comment>
 					<Type GUID="{70D42C6D-6F4E-4719-8B29-2883D5D59B1C}" PointerTo="1">ITcVnImage</Type>
 					<BitSize X64="64">32</BitSize>
 				</Parameter>
@@ -1120,935 +1123,639 @@
 			</Hides>
 		</DataType>
 		<DataType>
-			<Name GUID="{2B353D13-18B2-4617-86DF-03B9792C0361}" Namespace="VN" PersistentType="true">TcVnArray7_LREAL</Name>
-			<Comment><![CDATA[Seven-dimensional array of element-type LREAL.]]></Comment>
-			<BitSize>448</BitSize>
-			<BaseType GUID="{18071995-0000-0000-0000-00000000000E}">LREAL</BaseType>
-			<ArrayInfo>
-				<LBound>0</LBound>
-				<Elements>7</Elements>
-			</ArrayInfo>
-		</DataType>
-		<DataType>
-			<Name GUID="{0487C72D-26A8-4216-8606-07B28D49DF16}" PersistentType="true">ITcVnAccess_SINT</Name>
-			<Comment><![CDATA[Offers an access interface for SINT values.]]></Comment>
+			<Name GUID="{AC23D64B-CDFA-4D43-AE8B-364A856EB3E2}">ITcVnMlModel</Name>
+			<Comment><![CDATA[Interface for a machine learning model.]]></Comment>
 			<BitSize X64="64">32</BitSize>
 			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
 			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
+				<Name>GetTypeGuid</Name>
+				<Comment><![CDATA[Gets the GUID of the model.]]></Comment>
 				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
 				<ReturnBitSize>32</ReturnBitSize>
 				<Parameter>
-					<Name>nValue</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-000000000003}" ReferenceTo="true">SINT</Type>
+					<Name>nTypeGuid</Name>
+					<Comment><![CDATA[Returns the GUID of the model.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-000000000021}" ReferenceTo="true">GUID</Type>
 					<BitSize X64="64">32</BitSize>
 				</Parameter>
 			</Method>
 			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
+				<Name>GetTypeName</Name>
+				<Comment><![CDATA[Gets the model type name as a string.]]></Comment>
 				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
 				<ReturnBitSize>32</ReturnBitSize>
 				<Parameter>
-					<Name>nValue</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-000000000003}">SINT</Type>
+					<Name>sTypeName</Name>
+					<Comment><![CDATA[Returns the model type name as a string.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-00000000001A}">PCCH</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+				<Parameter>
+					<Name>nMaxLen</Name>
+					<Comment><![CDATA[Maximum string length allowed to be written in sTypeName.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-000000000005}">UINT</Type>
+					<BitSize>16</BitSize>
+				</Parameter>
+			</Method>
+			<Properties>
+				<Property>
+					<Name>docuFolder</Name>
+					<Value>Interfaces\Machine Learning</Value>
+				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
+				</Property>
+			</Properties>
+			<Hides>
+				<Hide GUID="{D76ED123-11ED-4478-A470-48105F509389}"/>
+			</Hides>
+		</DataType>
+		<DataType>
+			<Name GUID="{0162856D-6491-4A66-BB3A-80489E400478}">ITcVnIteratorBase</Name>
+			<Comment><![CDATA[Offers a base interface for iterators]]></Comment>
+			<BitSize X64="64">32</BitSize>
+			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
+			<Method>
+				<Name>CheckIfBegin</Name>
+				<Comment><![CDATA[Checks if the iterator points to the first element.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+			</Method>
+			<Method>
+				<Name>CheckIfEnd</Name>
+				<Comment><![CDATA[Checks if the iterator points to the past-the-end element (alternatively use F_VN_CheckIfIteratorIsAtEnd).]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+			</Method>
+			<Method>
+				<Name>GetValueSize</Name>
+				<Comment><![CDATA[Gets the memory size (in byte) required by the value the iterator points to.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>nSize</Name>
+					<Comment><![CDATA[Returns the element size in bytes.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-00000000000B}" ReferenceTo="true">ULINT</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetValueTypeGuid</Name>
+				<Comment><![CDATA[Gets the type GUID of the value the iterator points to.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>nTypeGuid</Name>
+					<Comment><![CDATA[Returns the type GUID.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-000000000021}" ReferenceTo="true">GUID</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>SetToBegin</Name>
+				<Comment><![CDATA[Sets the iterator to the first element (alternatively use F_VN_SetIteratorToBegin).]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+			</Method>
+			<Method>
+				<Name>SetToEnd</Name>
+				<Comment><![CDATA[Sets the iterator to the past-the-end element.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+			</Method>
+			<Properties>
+				<Property>
+					<Name>docuFolder</Name>
+					<Value>Interfaces\Containers\Iterators</Value>
+				</Property>
+			</Properties>
+			<Hides>
+				<Hide GUID="{AB02EAE0-36BE-4474-B925-4D6FACE129FE}"/>
+				<Hide GUID="{06EC3F2E-BBD5-42F3-9867-F95FD85B1D01}"/>
+				<Hide GUID="{776AA7E3-D07B-4F39-A76C-766605F5CB51}"/>
+				<Hide GUID="{227FA8EA-9C17-4B7D-B303-8E7FDDDD453F}"/>
+				<Hide GUID="{BD6B92F9-1793-4F0E-B9AC-1536C39C6D30}"/>
+			</Hides>
+		</DataType>
+		<DataType>
+			<Name GUID="{010A82ED-513F-4803-A63A-D4E4A54C2603}">ITcVnForwardIterator</Name>
+			<Comment><![CDATA[Offers an interface for a forward iterator.]]></Comment>
+			<BitSize X64="64">32</BitSize>
+			<BaseType GUID="{0162856D-6491-4A66-BB3A-80489E400478}">ITcVnIteratorBase</BaseType>
+			<Method>
+				<Name>CheckIfEqualTo</Name>
+				<Comment><![CDATA[Checks if iterator is equal to another iterator.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>ipIterator</Name>
+					<Comment><![CDATA[Iterator interface to compare with]]></Comment>
+					<Type GUID="{010A82ED-513F-4803-A63A-D4E4A54C2603}">ITcVnForwardIterator</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetContainer</Name>
+				<Comment><![CDATA[Gets a pointer to the current element converted into an ITcVnContainer interface and increment its reference counter (only possible for container types). (Alternatively use F_VN_GetContainer.)]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>pipContainer</Name>
+					<Comment><![CDATA[Returns the container interface.]]></Comment>
+					<Type GUID="{BC72B333-E095-465B-9693-7979773CA3B8}" PointerTo="1">ITcVnContainer</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>Increment</Name>
+				<Comment><![CDATA[Increments the iterator. (Alternatively use F_VN_IncrementIterator.)]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+			</Method>
+			<Method>
+				<Name>SetContainer</Name>
+				<Comment><![CDATA[Sets the current element using an ITcVnContainer interface (only possible for container types). (Alternatively use F_VN_SetContainer.)]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>ipContainer</Name>
+					<Comment><![CDATA[Container interface of which the content is to be assigned to the current element.]]></Comment>
+					<Type GUID="{BC72B333-E095-465B-9693-7979773CA3B8}">ITcVnContainer</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Properties>
+				<Property>
+					<Name>docuFolder</Name>
+					<Value>Interfaces\Containers\Iterators</Value>
+				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
+				</Property>
+			</Properties>
+			<Hides>
+				<Hide GUID="{51C309A3-D30B-4E79-BB31-E51C131FE8DB}"/>
+				<Hide GUID="{35BF5797-F153-40BB-912A-BE9BB58716F4}"/>
+				<Hide GUID="{C868611B-5123-44AB-A0F3-42B7F4E62A34}"/>
+				<Hide GUID="{A349DF1C-4BB6-4D37-83D8-D297C7B4FE8A}"/>
+				<Hide GUID="{9A39713B-6D78-43FE-A6CD-F90AD256429E}"/>
+				<Hide GUID="{8A9E6B51-95ED-4F0F-9675-8E080723A908}"/>
+				<Hide GUID="{F0B088BD-5560-4E47-8FEA-F15F7319497D}"/>
+				<Hide GUID="{931C9BD3-1AA2-4B88-9CFC-CDBD3305AAFA}"/>
+				<Hide GUID="{A6E5BDDD-EA57-409E-9A14-C47B97F66003}"/>
+				<Hide GUID="{2A51D485-AD8F-4D35-B950-5B25A6328CC7}"/>
+				<Hide GUID="{012D90C8-E3D8-4F42-BC94-2023012BCBD6}"/>
+				<Hide GUID="{0F033490-66B2-4B20-87EA-E513A8C672CE}"/>
+				<Hide GUID="{68A4AE23-1570-4F4B-AA7B-02E859D63345}"/>
+				<Hide GUID="{1589DD40-19AE-4FE4-B4E8-15AB101978C7}"/>
+				<Hide GUID="{888A0550-8AF7-4664-94B4-AF9051FBFB10}"/>
+				<Hide GUID="{042E9B51-2DFC-4AB1-B40A-C9105B4B17B4}"/>
+				<Hide GUID="{A153AC9F-E581-4E24-88BE-3B1795C00174}"/>
+				<Hide GUID="{DA26E498-D5DE-4DA9-A36F-6FBC80659703}"/>
+				<Hide GUID="{BF835A2A-BD32-4062-92BC-0EB5D5B300DA}"/>
+				<Hide GUID="{BFEA487E-5C30-4FA5-9D98-E01C60341FC9}"/>
+				<Hide GUID="{A3C198ED-640A-412C-B8E1-684FC93C6E63}"/>
+			</Hides>
+		</DataType>
+		<DataType>
+			<Name GUID="{F6C9D79D-2E9C-40FA-9865-3D23FAC6860C}">ITcVnBidirectionalIterator</Name>
+			<Comment><![CDATA[Offers an interface for a bidirectional iterator.]]></Comment>
+			<BitSize X64="64">32</BitSize>
+			<BaseType GUID="{010A82ED-513F-4803-A63A-D4E4A54C2603}">ITcVnForwardIterator</BaseType>
+			<Method>
+				<Name>Decrement</Name>
+				<Comment><![CDATA[Decrements the iterator.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+			</Method>
+			<Properties>
+				<Property>
+					<Name>docuFolder</Name>
+					<Value>Interfaces\Containers\Iterators</Value>
+				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
+				</Property>
+			</Properties>
+			<Hides>
+				<Hide GUID="{911AC0F6-E35F-4875-AEB8-2832C4BAB481}"/>
+				<Hide GUID="{D5321D62-D44B-46C0-82ED-E8E4F26D287F}"/>
+				<Hide GUID="{77D587C9-3438-4428-8FA4-E70C5152FF62}"/>
+				<Hide GUID="{97F60C6E-0E8B-4543-87D7-FF023813FAC2}"/>
+				<Hide GUID="{DB994273-AB51-4812-B829-A8AE3711EC5A}"/>
+				<Hide GUID="{AC1286F1-6F24-4578-8AE7-F848A3FE74C7}"/>
+				<Hide GUID="{B466C6E0-DD20-4292-B21A-DFF149DC71E2}"/>
+				<Hide GUID="{0E8B43EE-CE15-4BBF-B5AB-AF23A1480AC2}"/>
+				<Hide GUID="{BB23BD52-D3FD-406B-BDA1-72EEA4298535}"/>
+				<Hide GUID="{DEE7C18E-88B7-486F-94CC-92D9D58CCCBC}"/>
+				<Hide GUID="{678AAD14-3FC5-485F-9826-4BA7560AE5C4}"/>
+				<Hide GUID="{F6720576-BD44-464F-AB58-5BA9FFF6962F}"/>
+				<Hide GUID="{766B5F12-5623-436A-BEAC-03664A569F19}"/>
+				<Hide GUID="{696DE258-65C9-45F4-8378-B67235733514}"/>
+				<Hide GUID="{359288F6-E1ED-4505-BE87-AA6F150D7FAB}"/>
+				<Hide GUID="{01E23C4F-F3FC-460B-B641-68937CA5558B}"/>
+				<Hide GUID="{8C7E9B37-E338-436E-BFB2-E7972864B016}"/>
+				<Hide GUID="{9DCFD68E-E75E-48FC-98AE-4840D49078D4}"/>
+				<Hide GUID="{4E8F0FBC-8EB1-40D9-A56D-E59299C6614C}"/>
+				<Hide GUID="{2F76F28D-A927-480C-A6C8-C76C480B0F4D}"/>
+				<Hide GUID="{AFF5427C-4EEC-41EC-8C81-A383AF9120C0}"/>
+				<Hide GUID="{C9BB847B-E5B0-43EA-80CC-748F1F2C47ED}"/>
+			</Hides>
+		</DataType>
+		<DataType>
+			<Name GUID="{BCAC943A-527D-4A55-B4CD-386DBFF328B8}">ITcVnRandomAccessIterator</Name>
+			<Comment><![CDATA[Offers an interface for a random access iterator.]]></Comment>
+			<BitSize X64="64">32</BitSize>
+			<BaseType GUID="{F6C9D79D-2E9C-40FA-9865-3D23FAC6860C}">ITcVnBidirectionalIterator</BaseType>
+			<Method>
+				<Name>CheckIfGreaterThan</Name>
+				<Comment><![CDATA[Checks if the iterator is greater than another iterator.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>ipIterator</Name>
+					<Comment><![CDATA[Iterator interface to compare with.]]></Comment>
+					<Type GUID="{BCAC943A-527D-4A55-B4CD-386DBFF328B8}">ITcVnRandomAccessIterator</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>CheckIfLessThan</Name>
+				<Comment><![CDATA[Checks if the iterator is less than another iterator.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>ipIterator</Name>
+					<Comment><![CDATA[Iterator interface to compare with.]]></Comment>
+					<Type GUID="{BCAC943A-527D-4A55-B4CD-386DBFF328B8}">ITcVnRandomAccessIterator</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetContainerAt</Name>
+				<Comment><![CDATA[Gets a pointer to the element at a specific offset from the current element converted into an ITcVnContainer interface and increment its reference counter (only possible for container types). (Alternatively use F_VN_GetAt_ITcVnContainer.)]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>nOffset</Name>
+					<Comment><![CDATA[Offset from the current element.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-00000000000C}">LINT</Type>
+					<BitSize>64</BitSize>
+				</Parameter>
+				<Parameter>
+					<Name>pipContainer</Name>
+					<Comment><![CDATA[Returns the pointer to the container interface.]]></Comment>
+					<Type GUID="{BC72B333-E095-465B-9693-7979773CA3B8}" PointerTo="1">ITcVnContainer</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>SetContainerAt</Name>
+				<Comment><![CDATA[Sets the element at a specific offset from the current element using an ITcVnContainer interface (only possible for container types). (Alternatively use F_VN_SetAt_ITcVnContainer.)]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>nOffset</Name>
+					<Comment><![CDATA[Offset from the current element.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-00000000000C}">LINT</Type>
+					<BitSize>64</BitSize>
+				</Parameter>
+				<Parameter>
+					<Name>ipContainer</Name>
+					<Comment><![CDATA[Container interface of which the content is to be assigned to the current element.]]></Comment>
+					<Type GUID="{BC72B333-E095-465B-9693-7979773CA3B8}">ITcVnContainer</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Properties>
+				<Property>
+					<Name>docuFolder</Name>
+					<Value>Interfaces\Containers\Iterators</Value>
+				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
+				</Property>
+			</Properties>
+			<Hides>
+				<Hide GUID="{7FD95B2B-DD5D-4B52-AE34-35DA8EF6B5F1}"/>
+				<Hide GUID="{04006580-3C5C-4C62-AA29-DD32EEB53A08}"/>
+				<Hide GUID="{9D2801BD-1E4D-49DA-8019-E6BCE5E91CE2}"/>
+				<Hide GUID="{75DDC586-153E-4001-B245-03EAE6F6CD56}"/>
+				<Hide GUID="{35305D3B-440A-42BB-8785-A080BB3B72AD}"/>
+				<Hide GUID="{782E78E5-67BD-43C8-814E-C07C9D739F6B}"/>
+				<Hide GUID="{14E134C6-D089-4796-9CA8-462C858FFDF4}"/>
+				<Hide GUID="{2B23B00D-CD4D-4BA4-9914-E2E057D6AF17}"/>
+				<Hide GUID="{E746C0A9-25E1-44FD-A3B0-6DAB536C27BC}"/>
+				<Hide GUID="{881C7C77-82DC-4CE3-A4BE-F331239EE72D}"/>
+				<Hide GUID="{F3FB3492-E72B-41E6-9306-7E1F120408AF}"/>
+				<Hide GUID="{9C2E14C5-1EAF-4B04-B51C-AF61E5A73016}"/>
+				<Hide GUID="{9D796187-EF8A-4507-A759-C75B0B6126C8}"/>
+				<Hide GUID="{F11D431D-08ED-49B4-ABDF-A7D9E2D3BA2F}"/>
+				<Hide GUID="{BF0EFB55-97B7-49DC-811C-F27EDC8DCAC2}"/>
+				<Hide GUID="{02A518B6-A8CA-47EC-8ACC-0C0CE64ECCE4}"/>
+				<Hide GUID="{C0A8BFEC-3A9B-4EDB-8D07-F23FC6611ADA}"/>
+				<Hide GUID="{D8D9A037-D392-49EB-A00E-C3360DDA9B48}"/>
+				<Hide GUID="{37C8CE02-5482-40B8-A71A-C247E4E93BB1}"/>
+				<Hide GUID="{DB375D40-ADA2-4A90-AB63-EB9F7B345FA7}"/>
+				<Hide GUID="{B1C696F8-4711-4797-94BE-EBBE4402B75A}"/>
+				<Hide GUID="{0E4F1D63-C911-431B-B98E-854F37841296}"/>
+				<Hide GUID="{46725147-5BC9-4907-9ECE-7D0DAE2323F9}"/>
+			</Hides>
+		</DataType>
+		<DataType>
+			<Name GUID="{BC72B333-E095-465B-9693-7979773CA3B8}">ITcVnContainer</Name>
+			<Comment><![CDATA[Offers an interface for an object container.]]></Comment>
+			<BitSize X64="64">32</BitSize>
+			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
+			<Method>
+				<Name>CheckIfBasicContainer</Name>
+				<Comment><![CDATA[Checks if the container contains only basic (non-container) elements.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+			</Method>
+			<Method>
+				<Name>CheckIfEmpty</Name>
+				<Comment><![CDATA[Checks if the container is empty. (Alternatively use F_VN_CheckIfEmpty.)]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+			</Method>
+			<Method>
+				<Name>GetBidirectionalIterator</Name>
+				<Comment><![CDATA[Gets an interface pointer to a bidirectional iterator (if this iterator type is supported by the container) and increment its reference counter.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>pipIterator</Name>
+					<Comment><![CDATA[Returns the iterator interface.]]></Comment>
+					<Type GUID="{F6C9D79D-2E9C-40FA-9865-3D23FAC6860C}" PointerTo="1">ITcVnBidirectionalIterator</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetElementNum</Name>
+				<Comment><![CDATA[Gets the size (number of elements) of the container. (Alternatively use F_VN_GetNumberOfElements.)]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>nElementNum</Name>
+					<Comment><![CDATA[Returns the number of elements in the container.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-00000000000B}" ReferenceTo="true">ULINT</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetElementSize</Name>
+				<Comment><![CDATA[Gets the size (in byte) of each element in the container.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>nSize</Name>
+					<Comment><![CDATA[Returns the size in byte of a single element in the container.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-00000000000B}" ReferenceTo="true">ULINT</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetElementTypeGuid</Name>
+				<Comment><![CDATA[Gets the GUID of the container elements.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>nTypeGuid</Name>
+					<Comment><![CDATA[Returns the GUID of the container elements.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-000000000021}" ReferenceTo="true">GUID</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetExportSize</Name>
+				<Comment><![CDATA[Gets combined size (in byte) of all elements in the container.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>nExportSize</Name>
+					<Comment><![CDATA[Returns the combined size (in byte) of all elements in the container.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-00000000000B}" ReferenceTo="true">ULINT</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetForwardIterator</Name>
+				<Comment><![CDATA[Gets an interface pointer to a forward iterator (if this iterator type is supported by the container) and increment its reference counter. (Alternatively use F_VN_GetForwardIterator.)]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>pipIterator</Name>
+					<Comment><![CDATA[Returns the iterator interface.]]></Comment>
+					<Type GUID="{010A82ED-513F-4803-A63A-D4E4A54C2603}" PointerTo="1">ITcVnForwardIterator</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetRandomAccessIterator</Name>
+				<Comment><![CDATA[Gets an interface pointer to a random access iterator (if this iterator type is supported by the container) and increment its reference counter. (Alternatively use F_VN_GetRandomAccessIterator.)]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>pipIterator</Name>
+					<Comment><![CDATA[Returns the iterator interface.]]></Comment>
+					<Type GUID="{BCAC943A-527D-4A55-B4CD-386DBFF328B8}" PointerTo="1">ITcVnRandomAccessIterator</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetTypeGuid</Name>
+				<Comment><![CDATA[Gets GUID of the container.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>nTypeGuid</Name>
+					<Comment><![CDATA[Returns the GUID of the container.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-000000000021}" ReferenceTo="true">GUID</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetTypeName</Name>
+				<Comment><![CDATA[Gets the container type name as a string.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>sTypeName</Name>
+					<Comment><![CDATA[Returns the container type name as a string.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-00000000001A}">PCCH</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+				<Parameter>
+					<Name>nMaxLen</Name>
+					<Comment><![CDATA[Maximum string length allowed to be written in sTypeName]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-000000000005}">UINT</Type>
+					<BitSize>16</BitSize>
+				</Parameter>
+			</Method>
+			<Properties>
+				<Property>
+					<Name>docuFolder</Name>
+					<Value>Interfaces\Containers</Value>
+				</Property>
+				<Property>
+					<Name>CppApi_NoSmartPointer</Name>
+				</Property>
+			</Properties>
+			<Hides>
+				<Hide GUID="{63328A46-D768-429D-96BC-516FC092DFD0}"/>
+				<Hide GUID="{915E802A-C887-4E5D-B4F5-95E3BB636B5B}"/>
+				<Hide GUID="{B61B313A-D04B-4319-8E97-979B5F50844D}"/>
+				<Hide GUID="{F628B651-C520-4708-98B2-740E03017F0C}"/>
+				<Hide GUID="{0779CCB2-E712-4D65-8640-89572640CC2D}"/>
+				<Hide GUID="{8B3B9F65-B67C-48B0-9AB8-ADEE0208B422}"/>
+				<Hide GUID="{C61B9E40-A008-408C-B46A-4AEA3611F106}"/>
+				<Hide GUID="{BACB1416-03A9-4B44-AFF6-D72A7B6E8C15}"/>
+				<Hide GUID="{2CDC94B3-EA89-4076-AA75-CDA10359D3F4}"/>
+				<Hide GUID="{1A460E07-A83F-47AC-9FB6-CA4078A75E74}"/>
+				<Hide GUID="{398AF76A-7C44-4968-B686-B3611C43B6AC}"/>
+				<Hide GUID="{182CB62B-4ADD-4879-B1B0-D37A50353B59}"/>
+				<Hide GUID="{0341D478-C2BE-4CC1-85F3-ABE9DD64B9B7}"/>
+				<Hide GUID="{FE56D02B-9BAC-4EE2-90DD-21D0FE3CF463}"/>
+				<Hide GUID="{4AE05842-BFE3-4647-96F9-5BFF6689AA72}"/>
+				<Hide GUID="{40DF0212-D2AB-474C-B94C-DEA6EF2F6F2D}"/>
+				<Hide GUID="{995A756A-F407-4E70-B53F-2A423B940FDC}"/>
+				<Hide GUID="{3CA86E2D-05C6-4F35-A541-C85B75873D92}"/>
+				<Hide GUID="{F31E8C75-5531-4940-ABE2-700137BF1538}"/>
+				<Hide GUID="{009FC462-BFAF-4DB0-A632-1278509096B2}"/>
+				<Hide GUID="{177A622B-F4EC-48C9-A57E-10174EF261E2}"/>
+				<Hide GUID="{099A19C3-6213-4486-BC6C-61ECA59E71E6}"/>
+				<Hide GUID="{411CFF46-4467-4CC0-B450-3FF7796FB0FB}"/>
+				<Hide GUID="{B382ECE5-081B-49E9-8A29-ED677FE4A360}"/>
+				<Hide GUID="{7E911FD0-A254-44D6-BA35-3AED3DD9FC7D}"/>
+				<Hide GUID="{33053FE5-D96F-432B-B6E0-6FB23665AC17}"/>
+				<Hide GUID="{B4243A3F-5B1F-4E61-8EB0-C54EC743D656}"/>
+				<Hide GUID="{809363CA-CAA7-4630-BE1B-0C9F500B8798}"/>
+				<Hide GUID="{94FF5DCA-72D8-483A-84DB-E7B73921CCA1}"/>
+				<Hide GUID="{6D52B3C2-345D-486D-937E-05FAFFC467F2}"/>
+				<Hide GUID="{A208EB77-BCD8-4B8B-B9D7-F23A699DB4C6}"/>
+				<Hide GUID="{34706374-1DFB-4AE4-A4D2-9F2B67A05A9C}"/>
+				<Hide GUID="{0A24A968-C2FA-4A06-8E15-4A845EB142E6}"/>
+				<Hide GUID="{956616A2-2652-4A17-A1EA-B3CE70AEC5CB}"/>
+				<Hide GUID="{49529556-679A-4CAA-B0C8-7559128EA982}"/>
+				<Hide GUID="{87269DB3-2AE9-438A-850B-DA6713114C26}"/>
+				<Hide GUID="{ACAE8206-4B2F-4385-A097-13EF9322701D}"/>
+				<Hide GUID="{3AF2A65D-96E5-430F-A436-1F1EA439490C}"/>
+				<Hide GUID="{BD8A36CF-4FD5-4110-A571-912E2E01BDC8}"/>
+			</Hides>
+		</DataType>
+		<DataType>
+			<Name GUID="{E4FB6944-2DE3-495A-A7E6-182A6EDDF670}" PersistentType="true">ITcVnNeuralNetwork</Name>
+			<Comment><![CDATA[Interface for neural networks.]]></Comment>
+			<BitSize X64="64">32</BitSize>
+			<BaseType GUID="{AC23D64B-CDFA-4D43-AE8B-364A856EB3E2}">ITcVnMlModel</BaseType>
+			<Method>
+				<Name>Execute</Name>
+				<Comment><![CDATA[Execute a neural network using the provided image as input and provide the output from the last output layer. The method doesn't perform any pre-processing or transformation.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>ipSrcImage</Name>
+					<Comment><![CDATA[Source image (The image layout must be adapted to match the model's expected input format using e.g. F_VN_ConvertDataLayout or F_VN_ReshapeImage functions if necessary.)]]></Comment>
+					<Type GUID="{70D42C6D-6F4E-4719-8B29-2883D5D59B1C}">ITcVnImage</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+				<Parameter>
+					<Name>pipDestImage</Name>
+					<Comment><![CDATA[Destination image (An appropriate destination image based on the output layer is created. To process the destination image, use e.g. F_VN_ConvertDataLayout or F_VN_ReshapeImage if necessary.]]></Comment>
+					<Type GUID="{70D42C6D-6F4E-4719-8B29-2883D5D59B1C}" PointerTo="1">ITcVnImage</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>Execute_SingleLayerOutput</Name>
+				<Comment><![CDATA[Execute a neural network using the provided image as input and provide the output from a specified output layer. The method doesn't perform any pre-processing or transformation.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>ipSrcImage</Name>
+					<Comment><![CDATA[Source image (The image layout must be adapted to match the model's expected input format using e.g. F_VN_ConvertDataLayout or F_VN_ReshapeImage functions if necessary.)]]></Comment>
+					<Type GUID="{70D42C6D-6F4E-4719-8B29-2883D5D59B1C}">ITcVnImage</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+				<Parameter>
+					<Name>pipDestImage</Name>
+					<Comment><![CDATA[Destination image (An appropriate destination image based on the output layer is created. To process the destination image, use e.g. F_VN_ConvertDataLayout or F_VN_ReshapeImage if necessary.]]></Comment>
+					<Type GUID="{70D42C6D-6F4E-4719-8B29-2883D5D59B1C}" PointerTo="1">ITcVnImage</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+				<Parameter>
+					<Name>sLayerName</Name>
+					<Comment><![CDATA[Specify the name of the layer for which the output is required. If empty, the output of the last output layer is provided.]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-00000000001A}" Direction="in">PCCH</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>Execute_MultiLayerOutput</Name>
+				<Comment><![CDATA[Execute a neural network using the provided image as input and provide the output from the specified output layers. If sLayerNames is empty, the method returns the output of the unconnected output layers. The method doesn't perform any pre-processing or transformation.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>ipSrcImage</Name>
+					<Comment><![CDATA[Source image (The image layout must be adapted to match the model's expected input format using e.g. F_VN_ConvertDataLayout or F_VN_ReshapeImage functions if necessary.)]]></Comment>
+					<Type GUID="{70D42C6D-6F4E-4719-8B29-2883D5D59B1C}">ITcVnImage</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+				<Parameter>
+					<Name>pipDestImages</Name>
+					<Comment><![CDATA[Container of images containing the output from the specified layers]]></Comment>
+					<Type GUID="{BC72B333-E095-465B-9693-7979773CA3B8}" PointerTo="1">ITcVnContainer</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+				<Parameter>
+					<Name>ipLayerNames</Name>
+					<Comment><![CDATA[Container of layer names whose outputs are required (ContainerType_Vector_String_SINT). If set to zero, the container ipDestImages holds the outputs of all the unconnected output layers.]]></Comment>
+					<Type GUID="{BC72B333-E095-465B-9693-7979773CA3B8}">ITcVnContainer</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+			</Method>
+			<Method>
+				<Name>GetLayerNames</Name>
+				<Comment><![CDATA[Get the name of all layers in the model. If the bOnlyOuput flag is set to true, only the unconnected output layer names are returned.]]></Comment>
+				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
+				<ReturnBitSize>32</ReturnBitSize>
+				<Parameter>
+					<Name>pipLayerNames</Name>
+					<Comment><![CDATA[Container with the layers names (ContainerType_Vector_String_SINT) ]]></Comment>
+					<Type GUID="{BC72B333-E095-465B-9693-7979773CA3B8}" PointerTo="1">ITcVnContainer</Type>
+					<BitSize X64="64">32</BitSize>
+				</Parameter>
+				<Parameter>
+					<Name>bOnlyOutputs</Name>
+					<Comment><![CDATA[If true, only the unconnected output layer names are returned]]></Comment>
+					<Type GUID="{18071995-0000-0000-0000-000000000030}">BOOL</Type>
 					<BitSize>8</BitSize>
 				</Parameter>
 			</Method>
 			<Properties>
 				<Property>
 					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
+					<Value>Interfaces\Neural Network</Value>
 				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{B976A700-680B-4D98-A422-3DAAB772CDA7}" PersistentType="true">ITcVnAccess_DINT</Name>
-			<Comment TxtId=""><![CDATA[Offers an access interface for DINT values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>nValue</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-000000000009}" ReferenceTo="true">DINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>nValue</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-000000000009}">DINT</Type>
-					<BitSize>32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
 				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
+					<Name>CppApi_NoSmartPointer</Name>
 				</Property>
 			</Properties>
 			<Hides>
-				<Hide GUID="{0C5998B0-A25F-4367-8862-B80D8D472AA9}"/>
-				<Hide GUID="{E3B58103-C2AA-47F8-A2B4-FC00C0F12D82}"/>
+				<Hide GUID="{54111843-8A5B-4B6C-90CA-BD9C7573EBAB}"/>
+				<Hide GUID="{D88F17E6-2170-4041-AEA5-89195CF877EC}"/>
+				<Hide GUID="{A7A1C561-8A2F-4AC1-AD8C-7C35E17FF2A8}"/>
+				<Hide GUID="{CACDFF79-82FE-4E50-ADAA-662264F33630}"/>
+				<Hide GUID="{7F9F5BEF-71F5-45A1-9EAF-85EDB4ADDFAD}"/>
+				<Hide GUID="{B421FF66-CD48-4809-9887-5F7DA12DFEE0}"/>
+				<Hide GUID="{1DFE3C87-1767-4E43-B7F0-FC993B32E938}"/>
+				<Hide GUID="{CBF79C71-1B5C-4899-8E0A-3B30BC58117C}"/>
+				<Hide GUID="{7CA66F09-DAD7-453A-8F25-02DAF97B7E5A}"/>
+				<Hide GUID="{D9AEB34B-B8C6-45FF-AB8E-264B76ACB690}"/>
+				<Hide GUID="{DD32210F-42B2-48F1-9078-C36AE938BB7C}"/>
+				<Hide GUID="{F2E286DA-631F-4DCF-841F-9F9AAC9197A0}"/>
 			</Hides>
-		</DataType>
-		<DataType>
-			<Name GUID="{7196ECF3-D7E6-4F01-9889-652C87275E3C}" PersistentType="true">ITcVnAccess_UDINT</Name>
-			<Comment><![CDATA[Offers an access interface for UDINT values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>nValue</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-000000000008}" ReferenceTo="true">UDINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>nValue</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-000000000008}">UDINT</Type>
-					<BitSize>32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{252DBC07-54C1-47D5-9A56-BEA40BDD3A76}" PersistentType="true">ITcVnAccess_ULINT</Name>
-			<Comment><![CDATA[Offers an access interface for ULINT values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>nValue</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-00000000000B}" ReferenceTo="true">ULINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>nValue</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-00000000000B}">ULINT</Type>
-					<BitSize>64</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{21AEB775-EF11-4F5F-A93D-84005AC02C23}" PersistentType="true">ITcVnAccess_REAL</Name>
-			<Comment><![CDATA[Offers an access interface for REAL values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>fValue</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-00000000000D}" ReferenceTo="true">REAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>fValue</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-00000000000D}">REAL</Type>
-					<BitSize>32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{6D67E62F-71CE-4246-BFBA-598CBC724667}" PersistentType="true">ITcVnAccess_LREAL</Name>
-			<Comment><![CDATA[Offers an access interface for LREAL values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>fValue</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-00000000000E}" ReferenceTo="true">LREAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>fValue</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{18071995-0000-0000-0000-00000000000E}">LREAL</Type>
-					<BitSize>64</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{7EF40A83-0784-48B8-AD33-8243A819AB27}" Namespace="VN">TcVnVector2_DINT</Name>
-			<Comment><![CDATA[Two-dimensional vector for DINT values.]]></Comment>
-			<BitSize>64</BitSize>
-			<BaseType GUID="{18071995-0000-0000-0000-000000000009}">DINT</BaseType>
-			<ArrayInfo>
-				<LBound>0</LBound>
-				<Elements>2</Elements>
-			</ArrayInfo>
-			<Hides>
-				<Hide GUID="{8443BA75-35DC-4CE4-ABEE-5F584DB1C16E}"/>
-			</Hides>
-		</DataType>
-		<DataType>
-			<Name GUID="{E50FD705-3036-4755-A150-E10DADFBCFD9}" Namespace="VN">TcVnPoint2_DINT</Name>
-			<Comment><![CDATA[Contains the x coordinate [0] and the y coordinate [1] of a two-dimensional point.]]></Comment>
-			<BitSize>64</BitSize>
-			<BaseType GUID="{7EF40A83-0784-48B8-AD33-8243A819AB27}" Namespace="VN">TcVnVector2_DINT</BaseType>
-		</DataType>
-		<DataType>
-			<Name GUID="{BB5FA424-DAEE-4975-8991-89171FB03AFB}" PersistentType="true">ITcVnAccess_TcVnPoint2_DINT</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnPoint2_DINT values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value.]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aPoint</Name>
-					<Comment><![CDATA[Returns the value.]]></Comment>
-					<Type GUID="{E50FD705-3036-4755-A150-E10DADFBCFD9}" Namespace="VN" ReferenceTo="true">TcVnPoint2_DINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value.]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aPoint</Name>
-					<Comment><![CDATA[The value to set.]]></Comment>
-					<Type GUID="{E50FD705-3036-4755-A150-E10DADFBCFD9}" Namespace="VN" ReferenceTo="true">TcVnPoint2_DINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{4E4EA9C3-00D0-4474-876B-603F4AE8CEBC}" Namespace="VN">TcVnVector2_REAL</Name>
-			<Comment><![CDATA[Two-dimensional vector for REAL values.]]></Comment>
-			<BitSize>64</BitSize>
-			<BaseType GUID="{18071995-0000-0000-0000-00000000000D}">REAL</BaseType>
-			<ArrayInfo>
-				<LBound>0</LBound>
-				<Elements>2</Elements>
-			</ArrayInfo>
-		</DataType>
-		<DataType>
-			<Name GUID="{17E60320-5263-4689-829A-FB1F460EE3B0}" Namespace="VN">TcVnPoint2_REAL</Name>
-			<Comment><![CDATA[Contains the x coordinate [0] and the y coordinate [1] of a two-dimensional REAL point.]]></Comment>
-			<BitSize>64</BitSize>
-			<BaseType GUID="{4E4EA9C3-00D0-4474-876B-603F4AE8CEBC}" Namespace="VN">TcVnVector2_REAL</BaseType>
-		</DataType>
-		<DataType>
-			<Name GUID="{F1235D2C-E536-4B4D-9AA5-79B069D44B6A}" PersistentType="true">ITcVnAccess_TcVnPoint2_REAL</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnPoint2_REAL values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aPoint</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{17E60320-5263-4689-829A-FB1F460EE3B0}" Namespace="VN" ReferenceTo="true">TcVnPoint2_REAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aPoint</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{17E60320-5263-4689-829A-FB1F460EE3B0}" Namespace="VN" ReferenceTo="true">TcVnPoint2_REAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{8228BE9A-A121-4C3B-A526-4A9DA3BAA5DA}" Namespace="VN">TcVnVector2_LREAL</Name>
-			<Comment><![CDATA[Two-dimensional vector for LREAL values.]]></Comment>
-			<BitSize>128</BitSize>
-			<BaseType GUID="{18071995-0000-0000-0000-00000000000E}">LREAL</BaseType>
-			<ArrayInfo>
-				<LBound>0</LBound>
-				<Elements>2</Elements>
-			</ArrayInfo>
-		</DataType>
-		<DataType>
-			<Name GUID="{74AA049A-5C1C-4950-8FB4-1D9BD2CE9B35}" Namespace="VN">TcVnPoint2_LREAL</Name>
-			<Comment><![CDATA[Contains the x coordinate [0] and the y coordinate [1] of a two-dimensional LREAL point.]]></Comment>
-			<BitSize>128</BitSize>
-			<BaseType GUID="{8228BE9A-A121-4C3B-A526-4A9DA3BAA5DA}" Namespace="VN">TcVnVector2_LREAL</BaseType>
-			<Hides>
-				<Hide GUID="{D774EB1B-CB41-4454-A20B-692A1022887A}"/>
-			</Hides>
-		</DataType>
-		<DataType>
-			<Name GUID="{3381410F-F244-4B92-98CA-720F421FFA9C}" PersistentType="true">ITcVnAccess_TcVnPoint2_LREAL</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnPoint2_LREAL values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aPoint</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{74AA049A-5C1C-4950-8FB4-1D9BD2CE9B35}" Namespace="VN" ReferenceTo="true">TcVnPoint2_LREAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aPoint</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{74AA049A-5C1C-4950-8FB4-1D9BD2CE9B35}" Namespace="VN" ReferenceTo="true">TcVnPoint2_LREAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{BDB49C24-676C-4AFA-A8E9-D29059B3067D}" Namespace="VN">TcVnVector3_REAL</Name>
-			<Comment><![CDATA[Three-dimensional vector for REAL values.]]></Comment>
-			<BitSize>96</BitSize>
-			<BaseType GUID="{18071995-0000-0000-0000-00000000000D}">REAL</BaseType>
-			<ArrayInfo>
-				<LBound>0</LBound>
-				<Elements>3</Elements>
-			</ArrayInfo>
-			<Hides>
-				<Hide GUID="{B91D5AA6-A06B-4263-ACAC-CDF19E542D6D}"/>
-				<Hide GUID="{9BEA2431-D03C-4F19-92EF-7EC98FB96780}"/>
-				<Hide GUID="{1DC01B92-6F51-4DDF-8C83-B20A09A4E9ED}"/>
-				<Hide GUID="{CFDBEAEC-2AFC-4DE8-B974-8BB295ACF022}"/>
-				<Hide GUID="{875B7A47-56A7-44D6-88A6-F9CB29752F3A}"/>
-				<Hide GUID="{069387E7-B3E1-49B7-B0DC-079A7F3B7F48}"/>
-				<Hide GUID="{6E57F72A-DC53-4FD3-8EF1-60CCC9C031CE}"/>
-				<Hide GUID="{7D37AAB5-9E9C-4309-97C7-833916125FD3}"/>
-				<Hide GUID="{3D5EA06C-C782-4D6A-8B8E-E3D4351DAF0D}"/>
-				<Hide GUID="{9B820A25-C7CF-4319-B251-17B3380A9A4D}"/>
-				<Hide GUID="{437251BF-0E7A-4B50-9F9D-40F20777DFB8}"/>
-				<Hide GUID="{EDCD6AE0-57D3-4073-BA7D-6F3C72D923A5}"/>
-			</Hides>
-		</DataType>
-		<DataType>
-			<Name GUID="{555F6682-CBB3-4912-9979-999D9BAB868E}" Namespace="VN">TcVnPoint3_REAL</Name>
-			<Comment><![CDATA[Contains the x coordinate [0], the y coordinate [1] and the z coordinate [2] of a three-dimensional REAL point.]]></Comment>
-			<BitSize>96</BitSize>
-			<BaseType GUID="{BDB49C24-676C-4AFA-A8E9-D29059B3067D}" Namespace="VN">TcVnVector3_REAL</BaseType>
-		</DataType>
-		<DataType>
-			<Name GUID="{9C920E2C-99F0-4681-B240-F6937115D395}" PersistentType="true">ITcVnAccess_TcVnPoint3_REAL</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnPoint3_REAL values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aPoint</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{555F6682-CBB3-4912-9979-999D9BAB868E}" Namespace="VN" ReferenceTo="true">TcVnPoint3_REAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aPoint</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{555F6682-CBB3-4912-9979-999D9BAB868E}" Namespace="VN" ReferenceTo="true">TcVnPoint3_REAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{B9A67DEB-A7D1-4F25-95A3-4A82FA5C1E28}" Namespace="VN">TcVnVector3_LREAL</Name>
-			<Comment><![CDATA[Three-dimensional vector for LREAL values.]]></Comment>
-			<BitSize>192</BitSize>
-			<BaseType GUID="{18071995-0000-0000-0000-00000000000E}">LREAL</BaseType>
-			<ArrayInfo>
-				<LBound>0</LBound>
-				<Elements>3</Elements>
-			</ArrayInfo>
-		</DataType>
-		<DataType>
-			<Name GUID="{F745F7B9-D08E-4608-AAC9-BA4EF137F366}" Namespace="VN">TcVnPoint3_LREAL</Name>
-			<Comment><![CDATA[Contains the x coordinate [0], the y coordinate [1] and the z coordinate [2] of a three-dimensional LREAL point.]]></Comment>
-			<BitSize>192</BitSize>
-			<BaseType GUID="{B9A67DEB-A7D1-4F25-95A3-4A82FA5C1E28}" Namespace="VN">TcVnVector3_LREAL</BaseType>
-		</DataType>
-		<DataType>
-			<Name GUID="{885CF0CB-8571-4517-A3AC-44A9B734D71D}" PersistentType="true">ITcVnAccess_TcVnPoint3_LREAL</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnPoint3_LREAL values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aPoint</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{F745F7B9-D08E-4608-AAC9-BA4EF137F366}" Namespace="VN" ReferenceTo="true">TcVnPoint3_LREAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aPoint</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{F745F7B9-D08E-4608-AAC9-BA4EF137F366}" Namespace="VN" ReferenceTo="true">TcVnPoint3_LREAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{7C3899C4-4A43-4F7D-980E-27692F5C803E}" PersistentType="true">ITcVnAccess_TcVnVector2_DINT</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnVector2_DINT values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aVector</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{7EF40A83-0784-48B8-AD33-8243A819AB27}" Namespace="VN" ReferenceTo="true">TcVnVector2_DINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value.]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aVector</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{7EF40A83-0784-48B8-AD33-8243A819AB27}" Namespace="VN" ReferenceTo="true">TcVnVector2_DINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{F3273513-9CCC-4685-B709-62C964EC6C8A}" PersistentType="true">ITcVnAccess_TcVnVector2_REAL</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnVector2_REAL values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aVector</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{4E4EA9C3-00D0-4474-876B-603F4AE8CEBC}" Namespace="VN" ReferenceTo="true">TcVnVector2_REAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aVector</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{4E4EA9C3-00D0-4474-876B-603F4AE8CEBC}" Namespace="VN" ReferenceTo="true">TcVnVector2_REAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{D62BE8B8-B130-4192-AD85-9F0C63F30A74}" PersistentType="true">ITcVnAccess_TcVnVector3_REAL</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnVector3_REAL values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aVector</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{BDB49C24-676C-4AFA-A8E9-D29059B3067D}" Namespace="VN" ReferenceTo="true">TcVnVector3_REAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aVector</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{BDB49C24-676C-4AFA-A8E9-D29059B3067D}" Namespace="VN" ReferenceTo="true">TcVnVector3_REAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{0F933FA5-B30A-4CF2-B3FD-13B936FE1EFA}" Namespace="VN">TcVnVector4_DINT</Name>
-			<Comment><![CDATA[Four-dimensional vector for DINT values.]]></Comment>
-			<BitSize>128</BitSize>
-			<BaseType GUID="{18071995-0000-0000-0000-000000000009}">DINT</BaseType>
-			<ArrayInfo>
-				<LBound>0</LBound>
-				<Elements>4</Elements>
-			</ArrayInfo>
-		</DataType>
-		<DataType>
-			<Name GUID="{145CA3F8-C73D-4106-807D-89774C71C360}" PersistentType="true">ITcVnAccess_TcVnVector4_DINT</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnVector4_DINT values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aVector</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{0F933FA5-B30A-4CF2-B3FD-13B936FE1EFA}" Namespace="VN" ReferenceTo="true">TcVnVector4_DINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aVector</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{0F933FA5-B30A-4CF2-B3FD-13B936FE1EFA}" Namespace="VN" ReferenceTo="true">TcVnVector4_DINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{D6F8E615-70A9-407A-8442-ED15E6633AE8}" Namespace="VN">TcVnVector4_LREAL</Name>
-			<Comment><![CDATA[Four-dimensional vector for LREAL values.]]></Comment>
-			<BitSize>256</BitSize>
-			<BaseType GUID="{18071995-0000-0000-0000-00000000000E}">LREAL</BaseType>
-			<ArrayInfo>
-				<LBound>0</LBound>
-				<Elements>4</Elements>
-			</ArrayInfo>
-		</DataType>
-		<DataType>
-			<Name GUID="{59B6E8C8-D07D-4893-AFF4-0C86FFDF14B2}" PersistentType="true">ITcVnAccess_TcVnVector4_LREAL</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnVector4_LREAL values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aVector</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{D6F8E615-70A9-407A-8442-ED15E6633AE8}" Namespace="VN" ReferenceTo="true">TcVnVector4_LREAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>aVector</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{D6F8E615-70A9-407A-8442-ED15E6633AE8}" Namespace="VN" ReferenceTo="true">TcVnVector4_LREAL</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{EDDFAD84-6C7F-4BF3-AEB0-8D6817806345}" Namespace="VN">TcVnRectangle_DINT</Name>
-			<Comment><![CDATA[Contains origin and size of a rectangle.]]></Comment>
-			<BitSize>128</BitSize>
-			<SubItem>
-				<Name>nX</Name>
-				<Type GUID="{18071995-0000-0000-0000-000000000009}">DINT</Type>
-				<Comment><![CDATA[X coordinate of the top-left corner]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>0</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>nY</Name>
-				<Type GUID="{18071995-0000-0000-0000-000000000009}">DINT</Type>
-				<Comment><![CDATA[Y coordinate of the top-left corner]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>32</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>nWidth</Name>
-				<Type GUID="{18071995-0000-0000-0000-000000000009}">DINT</Type>
-				<Comment><![CDATA[Width]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>64</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>nHeight</Name>
-				<Type GUID="{18071995-0000-0000-0000-000000000009}">DINT</Type>
-				<Comment><![CDATA[Height]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>96</BitOffs>
-			</SubItem>
-		</DataType>
-		<DataType>
-			<Name GUID="{788837B1-9E55-43A4-AF2B-1B81D5D3C276}" PersistentType="true">ITcVnAccess_TcVnRectangle_DINT</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnRectangle_DINT values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>stRectangle</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{EDDFAD84-6C7F-4BF3-AEB0-8D6817806345}" Namespace="VN" ReferenceTo="true">TcVnRectangle_DINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>stRectangle</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{EDDFAD84-6C7F-4BF3-AEB0-8D6817806345}" Namespace="VN" ReferenceTo="true">TcVnRectangle_DINT</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{D339BE98-56F1-46CD-BB69-5C190E97C36D}" Namespace="VN">TcVnKeyPoint</Name>
-			<Comment><![CDATA[Describes a key point.]]></Comment>
-			<BitSize>224</BitSize>
-			<SubItem>
-				<Name>aPoint</Name>
-				<Type GUID="{17E60320-5263-4689-829A-FB1F460EE3B0}" Namespace="VN">TcVnPoint2_REAL</Type>
-				<Comment><![CDATA[Position]]></Comment>
-				<BitSize>64</BitSize>
-				<BitOffs>0</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>fDiameter</Name>
-				<Type GUID="{18071995-0000-0000-0000-00000000000D}">REAL</Type>
-				<Comment><![CDATA[Diameter]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>64</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>fAngle</Name>
-				<Type GUID="{18071995-0000-0000-0000-00000000000D}">REAL</Type>
-				<Comment><![CDATA[Angle]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>96</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>fResponse</Name>
-				<Type GUID="{18071995-0000-0000-0000-00000000000D}">REAL</Type>
-				<Comment><![CDATA[Response]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>128</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>nOctave</Name>
-				<Type GUID="{18071995-0000-0000-0000-000000000009}">DINT</Type>
-				<Comment><![CDATA[Octave]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>160</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>nClassId</Name>
-				<Type GUID="{18071995-0000-0000-0000-000000000009}">DINT</Type>
-				<Comment><![CDATA[Class ID]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>192</BitOffs>
-			</SubItem>
-		</DataType>
-		<DataType>
-			<Name GUID="{69643CDD-657E-4B26-8CED-A86941BB515F}" PersistentType="true">ITcVnAccess_TcVnKeyPoint</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnKeyPoint values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value.]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>stKeyPoint</Name>
-					<Comment><![CDATA[Returns the value.]]></Comment>
-					<Type GUID="{D339BE98-56F1-46CD-BB69-5C190E97C36D}" Namespace="VN" ReferenceTo="true">TcVnKeyPoint</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value.]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>stKeyPoint</Name>
-					<Comment><![CDATA[The value to set.]]></Comment>
-					<Type GUID="{D339BE98-56F1-46CD-BB69-5C190E97C36D}" Namespace="VN" ReferenceTo="true">TcVnKeyPoint</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
-		</DataType>
-		<DataType>
-			<Name GUID="{16ED6EA4-688B-4215-AAFA-38E03CDAE626}" Namespace="VN">TcVnDMatch</Name>
-			<Comment><![CDATA[Describes a descriptor match]]></Comment>
-			<BitSize>128</BitSize>
-			<SubItem>
-				<Name>nQueryIdx</Name>
-				<Type GUID="{18071995-0000-0000-0000-000000000009}">DINT</Type>
-				<Comment><![CDATA[Query descriptor index]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>0</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>nTrainIdx</Name>
-				<Type GUID="{18071995-0000-0000-0000-000000000009}">DINT</Type>
-				<Comment><![CDATA[Train descriptor index]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>32</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>nImageIdx</Name>
-				<Type GUID="{18071995-0000-0000-0000-000000000009}">DINT</Type>
-				<Comment><![CDATA[Train image index]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>64</BitOffs>
-			</SubItem>
-			<SubItem>
-				<Name>fDistance</Name>
-				<Type GUID="{18071995-0000-0000-0000-00000000000D}">REAL</Type>
-				<Comment><![CDATA[Distance between the descriptors (smaller distance means better match)]]></Comment>
-				<BitSize>32</BitSize>
-				<BitOffs>96</BitOffs>
-			</SubItem>
-		</DataType>
-		<DataType>
-			<Name GUID="{6AE5D2B2-3BF7-458C-9FE2-B3074B61AD63}" PersistentType="true">ITcVnAccess_TcVnDMatch</Name>
-			<Comment><![CDATA[Offers an access interface for TcVnDMatch values.]]></Comment>
-			<BitSize X64="64">32</BitSize>
-			<BaseType GUID="{00000001-0000-0000-E000-000000000064}">ITcUnknown</BaseType>
-			<Method>
-				<Name>Get</Name>
-				<Comment><![CDATA[Gets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>stDMatch</Name>
-					<Comment><![CDATA[Returns the value]]></Comment>
-					<Type GUID="{16ED6EA4-688B-4215-AAFA-38E03CDAE626}" Namespace="VN" ReferenceTo="true">TcVnDMatch</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Method>
-				<Name>Set</Name>
-				<Comment><![CDATA[Sets the value]]></Comment>
-				<ReturnType GUID="{18071995-0000-0000-0000-000000000019}">HRESULT</ReturnType>
-				<ReturnBitSize>32</ReturnBitSize>
-				<Parameter>
-					<Name>stDMatch</Name>
-					<Comment><![CDATA[The value to set]]></Comment>
-					<Type GUID="{16ED6EA4-688B-4215-AAFA-38E03CDAE626}" Namespace="VN" ReferenceTo="true">TcVnDMatch</Type>
-					<BitSize X64="64">32</BitSize>
-				</Parameter>
-			</Method>
-			<Properties>
-				<Property>
-					<Name>docuFolder</Name>
-					<Value>Interfaces\Containers\ITcVnAccess</Value>
-				</Property>
-			</Properties>
 		</DataType>
 	</DataTypes>
 	<ImageDatas>
@@ -2067,12 +1774,12 @@
 		</System>
 		<Plc>
 			<Project GUID="{95FC320C-4E0B-4461-AEA3-86397C33C560}" Name="PLC_BlobDetection_Watchdog" PrjFilePath="PLC_BlobDetection_Watchdog\PLC_BlobDetection_Watchdog.plcproj" TmcFilePath="PLC_BlobDetection_Watchdog\PLC_BlobDetection_Watchdog.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="PLC_BlobDetection_Watchdog\PLC_BlobDetection_Watchdog.tmc" TmcHash="{55B1F3DD-297B-BAD2-4547-DAA39DCCE21C}">
 					<Name>PLC_BlobDetection_Watchdog Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Contexts>
 						<Context>
-							<Id NeedCalleeCall="true">0</Id>
+							<Id>0</Id>
 							<Name>PlcTask</Name>
 							<ManualConfig>
 								<OTCID>#x02010040</OTCID>
@@ -2172,7 +1879,7 @@
 							</TcSmExtension>
 						</TcSmExtensions>
 					</Xml>
-					<Module Id="#x01010020" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010020" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.7.4" TcSmClass="CTComVisionObjDef">
 						<Name>FileSource1 Image Acquisition (CTcIoFileImageAcquisition)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{BB647BE1-7AC0-46E5-AE93-462BDD16DE1F}" TcSmClass="CTComVisionObjDef">
@@ -2299,7 +2006,7 @@
 							</InterfacePointerValues>
 						</TmcDesc>
 					</Module>
-					<Module Id="#x01010030" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.6.5" TcSmClass="CTComVisionObjDef">
+					<Module Id="#x01010030" KeepUnrestoredLinks="2" ClassFactoryId="Beckhoff Automation GmbH|TcVision|4.0.7.4" TcSmClass="CTComVisionObjDef">
 						<Name>FileSource1 Image Provider (CTcVnFileImageProvider)</Name>
 						<ImageId>1000</ImageId>
 						<TmcDesc GUID="{CA3A2AC6-9655-406B-B405-BFDCFD83E1BC}" TcSmClass="CTComVisionObjDef">

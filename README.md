@@ -2,7 +2,7 @@
 Clone the repository or download as a ZIP.<br/>
 Download the [TF7xxx sample images](https://download.beckhoff.com/download/software/GitHub/TF7xxx/TF7xxx_Sample_Images.zip) as ZIP from our website.<br/>
 First unzip the repository if not cloned, then extract the sample images into the images folder.<br/>
-You can use the PowerShell script (PS C:\TF7xxx_Samples> .\SetTcCOMModuleVersion.ps1 4.0.6.5 or 5.5.6) to set the version of the TcCOM modules (Camera or Filesource object) to a specific version.<br/>
+You can use the PowerShell script (PS C:\TF7xxx_Samples> .\SetVisionVersion.ps1 4.0.7.4 or 5.7.4.0) to set the version of the TcCOM modules (Camera or Filesource object) to a specific version.<br/>
 The PLC library always uses the newest version by default.
 
 # About this repository
